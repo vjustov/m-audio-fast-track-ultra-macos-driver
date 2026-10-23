@@ -1,0 +1,11 @@
+bogus unit 0x20 GET_CUR ERR 60 [Errno 60] Operation timed out
+bogus unit 0x20 GET_MAX ERR 60 [Errno 60] Operation timed out
+unit 5 ctl 0x30 GET_CUR 0000
+iface 3 GET_CUR ERR 13 [Errno 13] Access denied (insufficient permissions)
+GET_MEM unit5 len 2 ERR 84 [Errno 84] Overflow
+GET_MEM wValue 0 53000b0000000000000000000000000000000000
+meters [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0] status 0x103
+meters [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] status 0x103
+meters [1, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 7, 0, 0, 0, 0, 0, 0, 0, 0] status 0x103
+meters [5, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 5, 0, 0, 0, 0, 0, 0, 0, 0] status 0x103
+meters [5, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 7, 0, 0, 0, 0, 0, 0, 0, 0] status 0x103

@@ -1,0 +1,2 @@
+note round trips: 20/20 ok, latency min 1.68 ms, max 4.67 ms
+burst: sent 291 bytes, received 224 bytes, match: false

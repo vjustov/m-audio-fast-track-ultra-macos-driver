@@ -1,0 +1,7 @@
+notes before: 3/3
+8 notes in one packet (32 USB bytes): sent 24, received 24, exact=true, notes after=3/3
+12 notes in one packet (48 USB bytes): sent 36, received 36, exact=true, notes after=3/3
+15 notes in one packet (60 USB bytes): sent 45, received 45, exact=true, notes after=3/3
+16 notes in one packet (64 USB bytes): sent 48, received 48, exact=true, notes after=3/3
+17 notes in one packet (68 USB bytes): sent 51, received 0, exact=false, notes after=0/3
+MIDI stopped

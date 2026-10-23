@@ -1,0 +1,147 @@
+DEVICE ID 0763:2080 on Bus 002 Address 003 =================
+ bLength                :   0x12 (18 bytes)
+ bDescriptorType        :    0x1 Device
+ bcdUSB                 :  0x200 USB 2.0
+ bDeviceClass           :    0x0 Specified at interface
+ bDeviceSubClass        :    0x0
+ bDeviceProtocol        :    0x0
+ bMaxPacketSize0        :   0x40 (64 bytes)
+ idVendor               : 0x0763
+ idProduct              : 0x2080
+ bcdDevice              :  0x151 Device 1.51
+ iManufacturer          :    0x1 M-Audio
+ iProduct               :    0x2 Fast Track Ultra
+ iSerialNumber          :    0x0 
+ bNumConfigurations     :    0x1
+  CONFIGURATION 1: 498 mA ==================================
+   bLength              :    0x9 (9 bytes)
+   bDescriptorType      :    0x2 Configuration
+   wTotalLength         :  0x154 (340 bytes)
+   bNumInterfaces       :    0x5
+   bConfigurationValue  :    0x1
+   iConfiguration       :    0x0 
+   bmAttributes         :   0x80 Bus Powered
+   bMaxPower            :   0xf9 (498 mA)
+    INTERFACE 0: Vendor Specific ===========================
+     bLength            :    0x9 (9 bytes)
+     bDescriptorType    :    0x4 Interface
+     bInterfaceNumber   :    0x0
+     bAlternateSetting  :    0x0
+     bNumEndpoints      :    0x0
+     bInterfaceClass    :   0xff Vendor Specific
+     bInterfaceSubClass :    0x1
+     bInterfaceProtocol :    0x0
+     iInterface         :    0x2 Fast Track Ultra
+    INTERFACE 1: Vendor Specific ===========================
+     bLength            :    0x9 (9 bytes)
+     bDescriptorType    :    0x4 Interface
+     bInterfaceNumber   :    0x1
+     bAlternateSetting  :    0x0
+     bNumEndpoints      :    0x0
+     bInterfaceClass    :   0xff Vendor Specific
+     bInterfaceSubClass :    0x2
+     bInterfaceProtocol :    0x0
+     iInterface         :    0x0 
+    INTERFACE 1, 1: Vendor Specific ========================
+     bLength            :    0x9 (9 bytes)
+     bDescriptorType    :    0x4 Interface
+     bInterfaceNumber   :    0x1
+     bAlternateSetting  :    0x1
+     bNumEndpoints      :    0x2
+     bInterfaceClass    :   0xff Vendor Specific
+     bInterfaceSubClass :    0x2
+     bInterfaceProtocol :    0x0
+     iInterface         :    0x0 
+      ENDPOINT 0x1: Isochronous OUT ========================
+       bLength          :    0x7 (7 bytes)
+       bDescriptorType  :    0x5 Endpoint
+       bEndpointAddress :    0x1 OUT
+       bmAttributes     :    0x5 Isochronous
+       wMaxPacketSize   :  0x138 (312 bytes)
+       bInterval        :    0x1
+      ENDPOINT 0x82: Isochronous IN ========================
+       bLength          :    0x7 (7 bytes)
+       bDescriptorType  :    0x5 Endpoint
+       bEndpointAddress :   0x82 IN
+       bmAttributes     :    0x1 Isochronous
+       wMaxPacketSize   :    0x3 (3 bytes)
+       bInterval        :    0x1
+    INTERFACE 2: Vendor Specific ===========================
+     bLength            :    0x9 (9 bytes)
+     bDescriptorType    :    0x4 Interface
+     bInterfaceNumber   :    0x2
+     bAlternateSetting  :    0x0
+     bNumEndpoints      :    0x0
+     bInterfaceClass    :   0xff Vendor Specific
+     bInterfaceSubClass :    0x2
+     bInterfaceProtocol :    0x0
+     iInterface         :    0x0 
+    INTERFACE 2, 1: Vendor Specific ========================
+     bLength            :    0x9 (9 bytes)
+     bDescriptorType    :    0x4 Interface
+     bInterfaceNumber   :    0x2
+     bAlternateSetting  :    0x1
+     bNumEndpoints      :    0x1
+     bInterfaceClass    :   0xff Vendor Specific
+     bInterfaceSubClass :    0x2
+     bInterfaceProtocol :    0x0
+     iInterface         :    0x0 
+      ENDPOINT 0x81: Isochronous IN ========================
+       bLength          :    0x7 (7 bytes)
+       bDescriptorType  :    0x5 Endpoint
+       bEndpointAddress :   0x81 IN
+       bmAttributes     :    0x5 Isochronous
+       wMaxPacketSize   :  0x138 (312 bytes)
+       bInterval        :    0x1
+    INTERFACE 2, 2: Vendor Specific ========================
+     bLength            :    0x9 (9 bytes)
+     bDescriptorType    :    0x4 Interface
+     bInterfaceNumber   :    0x2
+     bAlternateSetting  :    0x2
+     bNumEndpoints      :    0x1
+     bInterfaceClass    :   0xff Vendor Specific
+     bInterfaceSubClass :    0x2
+     bInterfaceProtocol :    0x0
+     iInterface         :    0x0 
+      ENDPOINT 0x81: Isochronous IN ========================
+       bLength          :    0x7 (7 bytes)
+       bDescriptorType  :    0x5 Endpoint
+       bEndpointAddress :   0x81 IN
+       bmAttributes     :    0x5 Isochronous
+       wMaxPacketSize   :  0x138 (312 bytes)
+       bInterval        :    0x1
+    INTERFACE 3: Audio =====================================
+     bLength            :    0x9 (9 bytes)
+     bDescriptorType    :    0x4 Interface
+     bInterfaceNumber   :    0x3
+     bAlternateSetting  :    0x0
+     bNumEndpoints      :    0x2
+     bInterfaceClass    :    0x1 Audio
+     bInterfaceSubClass :    0x3
+     bInterfaceProtocol :    0x0
+     iInterface         :    0x5 Fast Track Ultra
+      ENDPOINT 0x7: Bulk OUT ===============================
+       bLength          :    0x7 (7 bytes)
+       bDescriptorType  :    0x5 Endpoint
+       bEndpointAddress :    0x7 OUT
+       bmAttributes     :    0x2 Bulk
+       wMaxPacketSize   :  0x200 (512 bytes)
+       bInterval        :    0x8
+      ENDPOINT 0x87: Bulk IN ===============================
+       bLength          :    0x7 (7 bytes)
+       bDescriptorType  :    0x5 Endpoint
+       bEndpointAddress :   0x87 IN
+       bmAttributes     :    0x2 Bulk
+       wMaxPacketSize   :  0x200 (512 bytes)
+       bInterval        :    0x0
+    INTERFACE 4: Application Specific ======================
+     bLength            :    0x9 (9 bytes)
+     bDescriptorType    :    0x4 Interface
+     bInterfaceNumber   :    0x4
+     bAlternateSetting  :    0x0
+     bNumEndpoints      :    0x0
+     bInterfaceClass    :   0xfe Application Specific
+     bInterfaceSubClass :    0x1
+     bInterfaceProtocol :    0x0
+     iInterface         :    0x7 M-Audio DFU
+config bytes 340

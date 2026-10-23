@@ -1,0 +1,4 @@
+duration 0 (shortest)
+duration 8128 (short)
+duration 16256 (medium)
+duration 32512 (longest)

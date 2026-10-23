@@ -1,0 +1,5 @@
+notes before: 5/5
+channel-message burst: sent 304, received 304, byte-exact: true
+notes after burst: 5/5
+sysex 7 bytes: received 11 F0 7D 01 02 03 04 F7 F7 00 F7 00
+notes after sysex: 5/5

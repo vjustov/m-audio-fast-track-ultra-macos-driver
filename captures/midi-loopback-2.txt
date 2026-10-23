@@ -1,0 +1,13 @@
+proto/midi_loopback.swift:83:9: warning: variable 'req' was never mutated; consider changing to 'let' constant
+81 |     lock.lock(); received.removeAll(); lock.unlock()
+82 |     let msg: [UInt8] = [0xF0, 0x7D] + (0..<size).map { UInt8($0 & 0x7F) } + [0xF7]
+83 |     var req = MIDISysexSendRequest(destination: dst, data: UnsafePointer(UnsafeMutablePointer<UInt8>.allocate(capacity: 1)), bytesToSend: 0, complete: false, reserved: (0, 0, 0), completionProc: { _ in }, completionRefCon: nil)
+   |         `- warning: variable 'req' was never mutated; consider changing to 'let' constant
+84 |     _ = req
+85 |     _ = send(msg)
+note round trips: 0/20 ok
+burst: sent 291 bytes, received 0 bytes, match: false
+sysex 7 bytes via MIDISend: received 0, match: false
+sysex 19 bytes via MIDISend: received 0, match: false
+sysex 67 bytes via MIDISend: received 0, match: false
+sysex 259 bytes via MIDISend: received 0, match: false

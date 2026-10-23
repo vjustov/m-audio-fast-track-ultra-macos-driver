@@ -1,0 +1,15 @@
+baseline                           in1=32767 out1-4=[32767, 713, 32767, 32767] out7/8=[32767, 713] fx=[0, 0] st=0x100
+-- unit 5 gain law (out1 <- src1) --
+set +0 dB                          in1= 7774 out1-4=[7774, 18, 3, 0] out7/8=[7774, 18] fx=[0, 0] st=0x100
+   measured out1/in1 = +0.0 dB
+set -6 dB                          in1= 7771 out1-4=[7771, 10, 5, 0] out7/8=[7771, 10] fx=[0, 0] st=0x100
+   measured out1/in1 = +0.0 dB
+set -12 dB                         in1= 7772 out1-4=[3894, 10, 3, 0] out7/8=[7772, 10] fx=[0, 0] st=0x100
+   measured out1/in1 = -6.0 dB
+set -20 dB                         in1= 7774 out1-4=[1952, 10, 4, 1] out7/8=[7774, 10] fx=[0, 0] st=0x100
+   measured out1/in1 = -12.0 dB
+set -40 dB                         in1= 7770 out1-4=[777, 9, 4, 0] out7/8=[7770, 9] fx=[0, 0] st=0x100
+   measured out1/in1 = -20.0 dB
+set +6 dB                          in1= 7772 out1-4=[77, 9, 3, 1] out7/8=[7772, 9] fx=[0, 0] st=0x100
+   measured out1/in1 = -40.1 dB
+set OFF                            in1= 7777 out1-4=[0, 9, 3, 0] out7/8=[7777, 9] fx=[0, 0] st=0x100

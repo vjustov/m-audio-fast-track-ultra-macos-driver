@@ -1,0 +1,6 @@
+alt2, out7<-src1 (default)         status=0x2100 in1=14281 in7/8=[7823, 6] out7/8=[14281, 715]
+out7<-src1 OFF                     status=0x2100 in1=7822 in7/8=[7820, 7] out7/8=[7820, 7]
+out8<-src1 0 dB                    status=0x2100 in1=7822 in7/8=[0, 7828] out7/8=[0, 7828]
+out7<-src1 -12 dB                  status=0x2100 in1=7822 in7/8=[1964, 7822] out7/8=[1964, 7822]
+out7 restored                      status=0x2100 in1=7822 in7/8=[7822, 6] out7/8=[7822, 6]
+alt1 -> alt0                       status=0x100 in1=7826 in7/8=[7818, 6] out7/8=[7826, 6]

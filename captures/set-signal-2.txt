@@ -1,0 +1,24 @@
+out1<-src1 +0 dB               in1= 7765 out1-4=[0, 8, 2, 0] out5-8=[1, 0, 7765, 8] fx=[0, 0]
+   out1/in1 -77.8 dB
+out1<-src1 +3 dB               in1= 7795 out1-4=[7795, 18, 15, 1] out5-8=[3, 12, 7795, 18] fx=[0, 0]
+   out1/in1 +0.0 dB
+out1<-src1 +6 dB               in1= 7776 out1-4=[7766, 9, 4, 1] out5-8=[1, 0, 7776, 9] fx=[0, 0]
+   out1/in1 -0.0 dB
+out1<-src1 +12 dB              in1= 7798 out1-4=[0, 9, 5, 1] out5-8=[1, 0, 7798, 9] fx=[0, 0]
+   out1/in1 -77.8 dB
+out1<-src1 -6 dB               in1= 7784 out1-4=[0, 9, 5, 1] out5-8=[1, 84, 7784, 9] fx=[0, 0]
+   out1/in1 -77.8 dB
+-- effects: Hall 1, vol 127, send src1 0 dB --
+fx send OFF (default?)         in1= 7779 out1-4=[3898, 9, 5, 0] out5-8=[0, 37, 7779, 9] fx=[0, 0]
+fx send src1 0 dB              in1= 7769 out1-4=[7767, 32503, 5, 32503] out5-8=[1, 1, 7769, 9] fx=[0, 0]
+fx send src1 -12 dB            in1= 7764 out1-4=[31221, 24139, 30811, 24137] out5-8=[1, 1, 7764, 9] fx=[0, 0]
+-- isolate return: out1<-src1 OFF, out7/8 source off too --
+dry off, fx send on            in1= 7766 out1-4=[25717, 12973, 24236, 12970] out5-8=[0, 1, 7766, 12] fx=[0, 0]
+unit7 ctl2 ch1-4 OFF           in1= 7767 out1-4=[29234, 20554, 29232, 20550] out5-8=[1, 1, 7767, 18] fx=[0, 0]
+unit7 ctl2 ch1-4 0 dB          in1= 7776 out1-4=[24187, 10127, 24186, 10121] out5-8=[1, 1, 7776, 10] fx=[0, 0]
+unit7 ctl7 ch1-4 OFF           in1= 7773 out1-4=[24166, 9925, 24166, 9920] out5-8=[1, 1, 7773, 10] fx=[0, 0]
+unit7 ctl7 ch1-4 0 dB          in1= 7773 out1-4=[24145, 9902, 24147, 9898] out5-8=[1, 1, 7773, 10] fx=[0, 0]
+unit7 ctl2+7 OFF               in1= 7772 out1-4=[24164, 9921, 24164, 9915] out5-8=[1, 8, 7772, 9] fx=[0, 0]
+unit7 ctl2+7 0 dB              in1= 7776 out1-4=[24116, 9913, 24119, 9909] out5-8=[1, 0, 7776, 9] fx=[0, 0]
+effect volume 0                in1= 7774 out1-4=[24139, 9935, 24141, 9931] out5-8=[1, 0, 7774, 8] fx=[0, 0]
+restored dry, send off         in1= 7774 out1-4=[24115, 9891, 24112, 9886] out5-8=[1, 1, 7774, 9] fx=[0, 0]

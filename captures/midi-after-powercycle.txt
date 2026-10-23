@@ -1,0 +1,1 @@
+note round trips: 20/20 ok, latency min 1.70 ms, max 2.00 ms

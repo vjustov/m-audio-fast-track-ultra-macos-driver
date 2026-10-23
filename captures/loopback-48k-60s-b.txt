@@ -1,0 +1,13 @@
+rate requested 48000, device reports 48000
+tone: channel 1, 997.0 Hz, -20.0 dBFS
+
+elapsed 60.00s
+capture : 480352 packets, 2882318 frames (48036.7 Hz), 0 errors, 0 empty
+playback: 480384 packets, 2882510 frames (48039.9 Hz), 0 errors, 416 fallback packets
+capture packet sizes (frames:count): 5:21255 6:437636 7:21461
+capture peaks dBFS: -64.7 -87.7 -83.6 -72.0 -88.7 -88.9 -20.0 -87.8
+wav: captures/loopback-48k-60s-b.wav (69175632 bytes of audio)
+rate 48000, 2882318 frames, signal starts at 0.000s
+fitted amplitude -20.00 dBFS (expected -20.0)
+worst residual 2.3 dB relative to tone
+blocks with residual > -40 dB: 1 [(np.float64(0.0), 36, np.float64(2.3))]

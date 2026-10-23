@@ -1,0 +1,18 @@
+  3.8s reverb only
+ 11.3s step 1: unit7 ctl2 ch[1] OFF
+ 17.7s step 1: restored
+ 24.2s step 2: unit7 ctl2 ch[2] OFF
+ 30.5s step 2: restored
+ 37.2s step 3: unit7 ctl2 ch[3] OFF
+ 43.5s step 3: restored
+ 50.2s step 4: unit7 ctl2 ch[4] OFF
+ 56.5s step 4: restored
+ 63.2s step 5: unit7 ctl2 ch[0] OFF
+ 69.5s step 5: restored
+ 76.8s step 6: unit7 ctl1 ch[0, 1, 2, 3, 4, 5, 6, 7, 8] OFF
+ 83.1s step 6: restored
+ 90.6s step 7: unit7 ctl3 ch[0, 1, 2, 3, 4, 5, 6, 7, 8] OFF
+ 96.9s step 7: restored
+104.1s step 8: unit7 ctl9 ch[0, 1, 2, 3, 4, 5, 6, 7, 8] OFF
+110.4s step 8: restored
+114.9s restored

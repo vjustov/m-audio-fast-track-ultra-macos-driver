@@ -1,0 +1,22 @@
+start (send on, dry off)           out1-4=[23731, 10230, 23732, 10238] fx=[0, 0] daw=[0, 0, 0, 0, 0, 0, 0, 0]
+unit5 out1-4 src17 OFF             out1-4=[23686, 10270, 23686, 10266] fx=[0, 0] daw=[0, 0, 0, 0, 0, 0, 0, 0]
+unit5 out1-4 src18 OFF             out1-4=[23606, 10124, 23606, 10117] fx=[0, 0] daw=[0, 0, 0, 0, 0, 0, 0, 0]
+unit5 out1-4 src19 OFF             out1-4=[23675, 10264, 23675, 10259] fx=[0, 0] daw=[0, 0, 0, 0, 0, 0, 0, 0]
+unit5 out1-4 src20 OFF             out1-4=[23644, 10157, 23644, 10151] fx=[0, 0] daw=[0, 0, 0, 0, 0, 0, 0, 0]
+unit5 out1-4 src0 OFF              out1-4=[23434, 9994, 23434, 9987] fx=[0, 0] daw=[0, 0, 0, 0, 0, 0, 0, 0]
+unit8 ctl1 ch0-4 OFF               out1-4=[23599, 10144, 23599, 10138] fx=[0, 0] daw=[0, 0, 0, 0, 0, 0, 0, 0]
+unit8 ctl2 ch0-4 OFF               out1-4=[23766, 10287, 23766, 10281] fx=[0, 0] daw=[0, 0, 0, 0, 0, 0, 0, 0]
+unit9 ctl1 ch0-4 OFF               out1-4=[23519, 10182, 23519, 10178] fx=[0, 0] daw=[0, 0, 0, 0, 0, 0, 0, 0]
+unit9 ctl2 ch0-4 OFF               out1-4=[23621, 10143, 23620, 10139] fx=[0, 0] daw=[0, 0, 0, 0, 0, 0, 0, 0]
+unit 10 err [Errno 60] Operation timed out
+unit10 ctl1 ch0-4 OFF              out1-4=[23630, 10247, 23631, 10246] fx=[0, 0] daw=[0, 0, 0, 0, 0, 0, 0, 0]
+unit 10 err [Errno 60] Operation timed out
+unit10 ctl2 ch0-4 OFF              out1-4=[23738, 10259, 23738, 10253] fx=[0, 0] daw=[0, 0, 0, 0, 0, 0, 0, 0]
+unit 11 err [Errno 60] Operation timed out
+unit11 ctl1 ch0-4 OFF              out1-4=[23645, 10186, 23645, 10180] fx=[0, 0] daw=[0, 0, 0, 0, 0, 0, 0, 0]
+unit 11 err [Errno 60] Operation timed out
+unit11 ctl2 ch0-4 OFF              out1-4=[23642, 10171, 23642, 10164] fx=[0, 0] daw=[0, 0, 0, 0, 0, 0, 0, 0]
+unit 12 err [Errno 60] Operation timed out
+unit12 ctl1 ch0-4 OFF              out1-4=[23780, 10277, 23779, 10274] fx=[0, 0] daw=[0, 0, 0, 0, 0, 0, 0, 0]
+unit 12 err [Errno 60] Operation timed out
+unit12 ctl2 ch0-4 OFF              out1-4=[23602, 10105, 23602, 10100] fx=[0, 0] daw=[0, 0, 0, 0, 0, 0, 0, 0]

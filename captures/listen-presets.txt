@@ -1,0 +1,8 @@
+program 0 = Room 1
+program 1 = Room 2
+program 2 = Room 3
+program 3 = Hall 1
+program 4 = Hall 2
+program 5 = Plate
+program 6 = Delay
+program 7 = Echo

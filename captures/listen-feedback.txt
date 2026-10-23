@@ -1,0 +1,5 @@
+feedback 0 (none)
+feedback 32 (low)
+feedback 64 (medium)
+feedback 100 (high)
+feedback 127 (maximum)

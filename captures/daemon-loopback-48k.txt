@@ -1,0 +1,36 @@
+streaming at 48000 Hz, clock Spdif, shared memory 1048744 bytes
+t=  1.0s cap=47812 play_read=50116 lead=2400 underruns=384 usb_errors=0 clock=48026.11 Hz
+t=  2.0s cap=95816 play_read=98120 lead=2400 underruns=384 usb_errors=0 clock=48004.77 Hz
+t=  3.0s cap=144011 play_read=146315 lead=2400 underruns=384 usb_errors=0 clock=48006.01 Hz
+t=  4.0s cap=192014 play_read=194318 lead=2400 underruns=384 usb_errors=0 clock=48006.64 Hz
+t=  5.0s cap=240018 play_read=242322 lead=2400 underruns=384 usb_errors=0 clock=48012.26 Hz
+t=  6.0s cap=288213 play_read=290517 lead=2400 underruns=384 usb_errors=0 clock=48027.84 Hz
+t=  7.0s cap=336217 play_read=338521 lead=2400 underruns=384 usb_errors=0 clock=48019.90 Hz
+t=  8.0s cap=384220 play_read=386524 lead=2400 underruns=384 usb_errors=0 clock=47994.00 Hz
+t=  9.0s cap=432416 play_read=434720 lead=2400 underruns=384 usb_errors=0 clock=47995.19 Hz
+t= 10.0s cap=480419 play_read=482723 lead=2400 underruns=384 usb_errors=0 clock=48035.75 Hz
+t= 11.0s cap=528614 play_read=530726 lead=2400 underruns=384 usb_errors=0 clock=48002.99 Hz
+t= 12.0s cap=576618 play_read=578922 lead=2400 underruns=384 usb_errors=0 clock=48020.68 Hz
+t= 13.0s cap=624813 play_read=626925 lead=2400 underruns=384 usb_errors=0 clock=48007.04 Hz
+t= 14.0s cap=672817 play_read=674928 lead=2400 underruns=384 usb_errors=0 clock=48082.25 Hz
+t= 15.0s cap=720820 play_read=723124 lead=2400 underruns=384 usb_errors=0 clock=48022.04 Hz
+t= 16.0s cap=768823 play_read=771127 lead=2400 underruns=384 usb_errors=0 clock=47973.78 Hz
+t= 17.0s cap=817019 play_read=819323 lead=2400 underruns=384 usb_errors=0 clock=47974.80 Hz
+t= 18.0s cap=865022 play_read=867326 lead=2400 underruns=384 usb_errors=0 clock=48024.84 Hz
+t= 19.0s cap=913025 play_read=915329 lead=2400 underruns=384 usb_errors=0 clock=48013.11 Hz
+t= 20.0s cap=961029 play_read=963333 lead=2400 underruns=384 usb_errors=0 clock=48005.17 Hz
+t= 21.0s cap=1009224 play_read=1011528 lead=2400 underruns=384 usb_errors=0 clock=48001.40 Hz
+t= 22.0s cap=1057228 play_read=1059532 lead=2400 underruns=384 usb_errors=0 clock=47993.39 Hz
+t= 23.0s cap=1105231 play_read=1107535 lead=2400 underruns=384 usb_errors=0 clock=47964.61 Hz
+t= 24.0s cap=1153427 play_read=1155731 lead=2400 underruns=384 usb_errors=0 clock=47984.39 Hz
+t= 25.0s cap=1201430 play_read=1203734 lead=2400 underruns=384 usb_errors=0 clock=47997.21 Hz
+t= 26.0s cap=1249625 play_read=1251929 lead=2400 underruns=384 usb_errors=0 clock=48004.98 Hz
+t= 27.0s cap=1297821 play_read=1299933 lead=2400 underruns=384 usb_errors=0 clock=48022.21 Hz
+t= 28.0s cap=1345632 play_read=1347936 lead=2400 underruns=384 usb_errors=0 clock=48173.33 Hz
+t= 29.0s cap=1393828 play_read=1396132 lead=2400 underruns=384 usb_errors=0 clock=48089.09 Hz
+
+elapsed 30.00s, capture 1442215 frames (48072.6 Hz), playback 1442215 frames, packet errors 0, fallback packets 384, capture overruns 0
+rate 48000, 1439911 frames, signal starts at 0.050s
+fitted amplitude -20.00 dBFS (expected -20.0)
+worst residual -6.1 dB relative to tone
+blocks with residual > -40 dB: 1 [(np.float64(0.05), 36022, np.float64(-6.1))]

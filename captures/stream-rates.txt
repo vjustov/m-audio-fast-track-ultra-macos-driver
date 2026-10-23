@@ -1,0 +1,28 @@
+== 44100
+rate requested 44100, device reports 44100
+capture : 40352 packets, 222453 frames (44465.0 Hz), 0 errors, 0 empty
+playback: 40384 packets, 222629 frames (44500.2 Hz), 0 errors, 416 fallback packets
+capture packet sizes (frames:count): 5:19659 6:20693
+capture peaks dBFS: -64.8 -80.3 -12.7 -80.9 -75.9 -67.6 -144.0 -144.0
+wav: ../captures/stream-44100.wav (5338872 bytes of audio)
+== 88200
+rate requested 88200, device reports 88200
+capture : 40096 packets, 442072 frames (88393.0 Hz), 0 errors, 0 empty
+playback: 40064 packets, 441721 frames (88322.9 Hz), 0 errors, 384 fallback packets
+capture packet sizes (frames:count): 5:1 6:1 7:3 9:2 10:4798 11:29450 12:5841
+capture peaks dBFS: -57.1 -76.8 -76.1 -71.7 -26.7 -86.9 -144.0 -144.0
+wav: ../captures/stream-88200.wav (10609728 bytes of audio)
+== 96000
+rate requested 96000, device reports 96000
+capture : 40352 packets, 484259 frames (96801.9 Hz), 0 errors, 0 empty
+playback: 40384 packets, 484643 frames (96878.7 Hz), 0 errors, 416 fallback packets
+capture packet sizes (frames:count): 10:4 11:6004 12:28297 13:6047
+capture peaks dBFS: -55.4 -84.7 -20.8 -84.2 -86.8 -86.2 -144.0 -144.0
+wav: ../captures/stream-96000.wav (11622216 bytes of audio)
+== 48000
+rate requested 48000, device reports 48000
+capture : 40384 packets, 242334 frames (48439.6 Hz), 0 errors, 0 empty
+playback: 40352 packets, 242143 frames (48401.4 Hz), 0 errors, 384 fallback packets
+capture packet sizes (frames:count): 5:1453 6:37459 7:1470 12:1 13:1
+capture peaks dBFS: -60.4 -75.0 -76.8 -76.5 -70.6 -74.6 -144.0 -144.0
+wav: ../captures/stream-48000.wav (5816016 bytes of audio)

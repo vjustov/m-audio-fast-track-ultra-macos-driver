@@ -1,0 +1,10 @@
+  0.0s dry off, reverb on (Room 1)
+  8.0s unit7 ctl2 OFF
+ 12.0s unit7 ctl2 0 dB
+ 16.0s unit7 ctl2 OFF
+ 20.0s unit7 ctl2 0 dB
+ 24.0s unit7 ctl7 OFF
+ 28.0s unit7 ctl7 0 dB
+ 32.1s unit7 ctl7 OFF
+ 36.1s unit7 ctl7 0 dB
+ 40.1s restored: dry tone left, reverb off

@@ -1,0 +1,10 @@
+elapsed 60.00s
+capture : 480352 packets, 2882318 frames (48038.5 Hz), 0 errors, 0 empty
+playback: 480352 packets, 2882318 frames (48038.5 Hz), 0 errors, 416 fallback packets
+capture packet sizes (frames:count): 5:21293 6:437560 7:21499
+capture peaks dBFS: -63.7 -87.6 -81.7 -88.2 -88.8 -88.8 -20.0 -87.6
+wav: captures/loopback-48k-60s.wav (69175632 bytes of audio)
+rate 48000, 2882318 frames, signal starts at 0.000s
+fitted amplitude -20.00 dBFS (expected -20.0)
+worst residual 5.7 dB relative to tone
+blocks with residual > -40 dB: 3 [(np.float64(0.0), 3, np.float64(5.7)), (np.float64(12.0), 17505, np.float64(-0.4)), (np.float64(13.0), 41542, np.float64(-21.4))]

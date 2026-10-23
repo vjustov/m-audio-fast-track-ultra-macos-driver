@@ -1,0 +1,11 @@
+  5.2s dry off, reverb on
+ 13.3s unit7 ctl2 OFF
+ 20.3s unit7 ctl2 0 dB
+ 27.4s unit7 ctl2 OFF
+ 34.5s unit7 ctl2 0 dB
+ 41.7s unit7 ctl7 OFF
+ 48.9s unit7 ctl7 0 dB
+ 56.0s unit7 ctl7 OFF
+ 63.2s unit7 ctl7 0 dB
+ 69.6s send OFF (reference: real cut)
+ 75.2s restored

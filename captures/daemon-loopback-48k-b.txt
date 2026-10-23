@@ -1,0 +1,24 @@
+streaming at 48000 Hz, clock Spdif, shared memory 1048744 bytes
+t=  1.0s cap=47812 play_read=50116 lead=2400 underruns=0 usb_errors=0 clock=48007.56 Hz
+t=  2.0s cap=95622 play_read=97734 lead=2400 underruns=0 usb_errors=0 clock=47829.37 Hz
+t=  3.0s cap=143625 play_read=145738 lead=2400 underruns=0 usb_errors=0 clock=48029.47 Hz
+t=  4.0s cap=191629 play_read=193933 lead=2400 underruns=0 usb_errors=0 clock=48003.06 Hz
+t=  5.0s cap=239825 play_read=241936 lead=2400 underruns=0 usb_errors=0 clock=47999.28 Hz
+t=  6.0s cap=287828 play_read=289940 lead=2400 underruns=0 usb_errors=0 clock=48013.33 Hz
+t=  7.0s cap=335831 play_read=337943 lead=2400 underruns=0 usb_errors=0 clock=48015.25 Hz
+t=  8.0s cap=383835 play_read=385947 lead=2400 underruns=0 usb_errors=0 clock=48002.03 Hz
+t=  9.0s cap=431838 play_read=433950 lead=2400 underruns=0 usb_errors=0 clock=47991.93 Hz
+t= 10.0s cap=479842 play_read=481954 lead=2400 underruns=0 usb_errors=0 clock=48002.91 Hz
+t= 11.0s cap=528037 play_read=530149 lead=2400 underruns=0 usb_errors=0 clock=47997.04 Hz
+t= 12.0s cap=576040 play_read=578152 lead=2400 underruns=0 usb_errors=0 clock=48006.56 Hz
+t= 13.0s cap=624044 play_read=626156 lead=2400 underruns=0 usb_errors=0 clock=47997.41 Hz
+t= 14.0s cap=672047 play_read=674159 lead=2400 underruns=0 usb_errors=0 clock=48002.70 Hz
+t= 15.0s cap=720051 play_read=722163 lead=2400 underruns=0 usb_errors=0 clock=48004.87 Hz
+t= 16.0s cap=768054 play_read=770166 lead=2400 underruns=0 usb_errors=0 clock=48000.84 Hz
+t= 17.0s cap=816057 play_read=818361 lead=2400 underruns=0 usb_errors=0 clock=48002.31 Hz
+t= 18.0s cap=864061 play_read=866365 lead=2400 underruns=0 usb_errors=0 clock=48004.04 Hz
+t= 19.0s cap=912256 play_read=914368 lead=2400 underruns=0 usb_errors=0 clock=48007.53 Hz
+
+elapsed 20.00s, capture 961796 frames (48085.5 Hz), playback 961796 frames, packet errors 0, fallback packets 384, capture overruns 0
+worst residual -0.2 dB relative to tone
+blocks with residual > -40 dB: 2 [(np.float64(0.0), 1082, np.float64(-0.4)), (np.float64(1.0), 17018, np.float64(-0.2))]

@@ -1,0 +1,2 @@
+ctl2 ch4 OFF
+ctl2 ch4 0 dB

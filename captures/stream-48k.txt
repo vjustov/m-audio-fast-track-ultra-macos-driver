@@ -1,0 +1,11 @@
+rate requested 48000, device reports 48000
+tone: channel 1, 440.0 Hz, -30.0 dBFS
+t= 1.0s in1=23795 daw1-8=[1036 0 0 0 0 0 0 0] out1-4=[32767 32767 32767 32767] status=0x0100
+t= 2.0s in1=   14 daw1-8=[1036 0 0 0 0 0 0 0] out1-4=[1046 1 2 1] status=0x0100
+
+elapsed 2.46s
+capture : 19552 packets, 117323 frames (47782.9 Hz), 0 errors, 0 empty
+playback: 19560 packets, 117420 frames (47822.4 Hz), 0 errors, 80 fallback packets
+capture packet sizes (frames:count): 5:1102 6:17337 7:1113
+capture peaks dBFS: -12.6 -79.7 -82.3 -88.7 -88.9 -90.1 -144.0 -144.0
+wav: ../captures/stream-48k.wav (2815752 bytes of audio)

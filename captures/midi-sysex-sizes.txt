@@ -1,0 +1,13 @@
+sysex 4B -> rx 8B exact=false notes=3/3  F0 7D 00 F7 F7 00 F7 00
+sysex 5B -> rx 5B exact=true notes=3/3  F0 7D 00 01 F7
+sysex 6B -> rx 6B exact=true notes=3/3  F0 7D 00 01 02 F7
+sysex 7B -> rx 11B exact=false notes=3/3  F0 7D 00 01 02 03 F7 F7 00 F7 00
+sysex 8B -> rx 8B exact=true notes=3/3  F0 7D 00 01 02 03 04 F7
+sysex 9B -> rx 9B exact=true notes=3/3  F0 7D 00 01 02 03 04 05 F7
+sysex 11B -> rx 11B exact=true notes=3/3  F0 7D 00 01 02 03 04 05 06 07 F7
+sysex 15B -> rx 15B exact=true notes=3/3  F0 7D 00 01 02 03 04 05 06 07 08 09 0A 0B F7
+sysex 19B -> rx 23B exact=false notes=3/3  F0 7D 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F F7 F7 00 F7 00
+sysex 27B -> rx 27B exact=true notes=3/3   0D 0E 0F 10 11 12 13 14 15 16 17 F7
+sysex 35B -> rx 37B exact=false notes=3/3   17 18 19 1A 1B 1C 1D 1E 1F F7 F7 00
+sysex 51B -> rx 0B exact=false notes=0/3  
+MIDI stopped after 51-byte sysex
