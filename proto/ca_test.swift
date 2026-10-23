@@ -1,6 +1,6 @@
 // ca_test: end-to-end check through Core Audio. Plays a sine on one output channel of
 // the "Fast Track Ultra" device and records all 8 inputs to a WAV file.
-// Usage: swift proto/ca_test.swift <seconds> <out.wav> [channel 1-8] [dBFS]
+// Usage: swift proto/ca_test.swift <seconds> <out.wav> [channel 1-8] [dBFS] [sample rate]
 import AVFoundation
 import CoreAudio
 
@@ -31,6 +31,7 @@ let seconds = args.count > 1 ? Double(args[1])! : 5
 let outPath = args.count > 2 ? args[2] : "ca_capture.wav"
 let channel = args.count > 3 ? Int(args[3])! : 1
 let dbfs = args.count > 4 ? Double(args[4])! : -20
+let wantRate = args.count > 5 ? Double(args[5])! : 0
 
 guard var dev = deviceID(named: "Fast Track Ultra") else { print("device not found"); exit(1) }
 let engine = AVAudioEngine()
@@ -49,6 +50,16 @@ func nominalRate(_ id: AudioDeviceID) -> Double {
     var sz = UInt32(MemoryLayout<Float64>.size)
     AudioObjectGetPropertyData(id, &addr, 0, nil, &sz, &r)
     return r
+}
+if wantRate > 0 && nominalRate(dev) != wantRate {
+    var addr = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyNominalSampleRate,
+                                          mScope: kAudioObjectPropertyScopeGlobal,
+                                          mElement: kAudioObjectPropertyElementMain)
+    var r = Float64(wantRate)
+    let st = AudioObjectSetPropertyData(dev, &addr, 0, nil, UInt32(MemoryLayout<Float64>.size), &r)
+    let t0 = Date()
+    while nominalRate(dev) != wantRate && Date().timeIntervalSince(t0) < 5 { Thread.sleep(forTimeInterval: 0.05) }
+    print("set rate \(wantRate): status \(st), now \(nominalRate(dev)) after \(String(format: "%.2f", Date().timeIntervalSince(t0))) s")
 }
 let rate = nominalRate(dev)
 // More than 2 channels needs an explicit layout, or AVAudioFormat returns nil.

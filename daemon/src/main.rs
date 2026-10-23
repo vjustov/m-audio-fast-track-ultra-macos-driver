@@ -230,6 +230,7 @@ const DEFAULT_RATE: u32 = 48000;
 
 extern "C" {
     fn ftu_xpc_listen(name: *const libc::c_char, addr: *mut libc::c_void, len: usize) -> libc::c_int;
+    fn ftu_xpc_take_requested_rate() -> u32;
 }
 
 /// Runs forever: holds the shared memory, serves XPC, and keeps the device streaming.
@@ -242,23 +243,67 @@ fn run_service() -> Result<(), Box<dyn std::error::Error>> {
     }
     eprintln!("ftu-daemon: serving {SERVICE_NAME}, shared memory {} bytes", shm.len());
 
+    let mut rate = DEFAULT_RATE;
     loop {
         let mut dev = match Device::open() {
             Ok(d) => d,
             Err(_) => {
+                // Keep honouring rate requests while the device is away.
+                // SAFETY: plain C function, no arguments.
+                let r = unsafe { ftu_xpc_take_requested_rate() };
+                if r != 0 {
+                    rate = r;
+                }
                 std::thread::sleep(Duration::from_secs(2));
                 continue;
             }
         };
-        let cfg = StreamConfig { sample_rate: DEFAULT_RATE, clock: ClockSource::Internal };
+        let cfg = StreamConfig { sample_rate: rate, clock: ClockSource::Internal };
         match Stream::start(&mut dev, shm.clone(), cfg) {
             Ok(stream) => {
                 eprintln!("ftu-daemon: streaming at {} Hz", stream.shm().sample_rate.load(Ordering::Acquire));
+                let mut new_rate = None;
+                let mut last_report = Instant::now();
+                let mut reported = (0u64, 0u64);
                 while !stream.failed() {
-                    std::thread::sleep(Duration::from_millis(200));
+                    // Log underruns and USB errors when they change, at most every 10 s.
+                    if last_report.elapsed() >= Duration::from_secs(10) {
+                        last_report = Instant::now();
+                        let s = stream.shm();
+                        let now = (s.play_underruns.load(Ordering::Relaxed), s.usb_errors.load(Ordering::Relaxed));
+                        let plugin = (s.plugin_late_writes.load(Ordering::Relaxed), s.plugin_short_reads.load(Ordering::Relaxed));
+                        if now != reported {
+                            eprintln!(
+                                "ftu-daemon: playback underruns {}, usb errors {}, plugin late writes {}, short reads {}, lead {} frames",
+                                now.0,
+                                now.1,
+                                plugin.0,
+                                plugin.1,
+                                s.play_read_pos.load(Ordering::Relaxed) as i64 - s.cap_write_pos.load(Ordering::Relaxed) as i64
+                            );
+                            reported = now;
+                        }
+                    }
+                    // SAFETY: as above.
+                    let r = unsafe { ftu_xpc_take_requested_rate() };
+                    if r != 0 && r != rate {
+                        new_rate = Some(r);
+                        break;
+                    }
+                    std::thread::sleep(Duration::from_millis(50));
                 }
                 let stats = stream.stop(&mut dev);
-                eprintln!("ftu-daemon: stream stopped ({stats:?}), reconnecting");
+                match new_rate {
+                    Some(r) => {
+                        eprintln!("ftu-daemon: switching to {r} Hz");
+                        rate = r;
+                        continue; // reuse the open device, restart immediately
+                    }
+                    None => {
+                        eprintln!("ftu-daemon: stream stopped ({stats:?}), restarting");
+                        continue; // device handle still open; restart right away
+                    }
+                }
             }
             Err(e) => eprintln!("ftu-daemon: start failed: {e}"),
         }

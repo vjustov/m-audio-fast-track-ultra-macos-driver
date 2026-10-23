@@ -1,0 +1,8 @@
+set rate 44100.0: status 0, now 44100.0 after 0.23 s
+rate 44100: peak -0.1 dBFS, clicks 11, interval 0.7500s spread 0.02 ms, zero-runs []
+set rate 48000.0: status 0, now 48000.0 after 0.22 s
+rate 48000: peak -0.1 dBFS, clicks 11, interval 0.7500s spread 0.02 ms, zero-runs []
+set rate 88200.0: status 0, now 88200.0 after 0.22 s
+rate 88200: peak -0.2 dBFS, clicks 11, interval 0.7500s spread 0.02 ms, zero-runs []
+set rate 96000.0: status 0, now 96000.0 after 0.23 s
+rate 96000: peak -0.2 dBFS, clicks 10, interval 0.7500s spread 0.03 ms, zero-runs []

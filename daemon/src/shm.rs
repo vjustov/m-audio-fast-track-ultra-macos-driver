@@ -4,7 +4,7 @@
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 pub const MAGIC: u32 = 0x3155_5446; // "FTU1"
-pub const VERSION: u32 = 1;
+pub const VERSION: u32 = 2;
 pub const CHANNELS: usize = 8;
 pub const RING_FRAMES: usize = 16384;
 const RING_SAMPLES: usize = RING_FRAMES * CHANNELS;
@@ -32,7 +32,10 @@ pub struct Shm {
     pub play_underruns: AtomicU64,
     pub usb_errors: AtomicU64,
 
-    _reserved: [u8; 64],
+    pub plugin_late_writes: AtomicU64,
+    pub plugin_short_reads: AtomicU64,
+
+    _reserved: [u8; 48],
 
     capture: [f32; RING_SAMPLES],
     playback: [f32; RING_SAMPLES],

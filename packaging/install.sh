@@ -23,7 +23,16 @@ sed -e "s|@USER@|$USER_NAME|g" -e "s|@LOG@|$USER_HOME/Library/Logs/ftu-daemon.lo
 chown root:wheel "$PLIST"
 chmod 644 "$PLIST"
 launchctl bootout system/local.ftu.daemon 2>/dev/null || true
-launchctl bootstrap system "$PLIST"
+# bootout returns before the old job is gone; bootstrap fails with error 5 until then.
+for _ in $(seq 1 50); do
+  launchctl print system/local.ftu.daemon >/dev/null 2>&1 || break
+  sleep 0.1
+done
+for attempt in 1 2 3 4 5; do
+  launchctl bootstrap system "$PLIST" && break
+  [ "$attempt" = 5 ] && { echo "launchctl bootstrap failed"; exit 1; }
+  sleep 1
+done
 
 echo "Installing $DRIVER"
 install -d -o root -g wheel /Library/Audio/Plug-Ins/HAL

@@ -123,12 +123,16 @@ A command-line tool that talks to the device directly with libusb or the IOUSBHo
   - Core Audio lists "Fast Track Ultra", 8 in / 8 out, 48 kHz. The plugin connects to the daemon over XPC.
   - Playback through Core Audio confirmed: a -20 dBFS tone from `proto/ca_test.swift` read 3276 on the DAW 1 meter, the exact expected value.
   - Recording through Core Audio confirmed: a phone metronome into input 1 came back as 10 clicks at 80.0 BPM, interval spread 0.48 ms, no dropouts, peak -29 dBFS. Inputs 2 to 6 stayed at their noise floors (`captures/ca-test-metronome.txt`).
+  - DAW test passed (user, 2026-10-24): Ableton Live Lite recorded input 1 and played it back to both sides of the headphones.
+  - Sample-rate switching from Core Audio works at 44.1, 48, 88.2 and 96 kHz. The plugin asks the daemon over XPC; the switch takes 0.1 to 0.25 s. Metronome recordings at each rate: click interval spread at most 0.03 ms, no dropouts (`captures/ca-rates.txt`).
+  - Latency reduced from 64 ms to 24 ms output safety offset: capture transfers complete every 1 ms, 16 ms playback queue, a control loop holds the playback lead constant. An 8 ms queue failed with `kIOReturnIsoTooOld` (libusb schedules every submit at least 4 ms ahead).
+  - 3-minute soak at 48 kHz on the 24 ms build: 240 clicks, interval spread 0.08 ms, no dropouts, zero playback underruns, USB errors, late writes and short reads.
 
 - Side project: firmware patching for the MIDI bugs. See `docs/firmware.md`.
 
 ## Next action
 
-Phase 7: test in a DAW. Then sample-rate switching from Core Audio and mixer control over XPC.
+Phase 7: mixer control over XPC, the base for the control panel app. Phase 8: longer soaks and lower latency.
 
 ---
 

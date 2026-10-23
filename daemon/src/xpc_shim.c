@@ -1,10 +1,13 @@
 // XPC listener for ftu-daemon. Written in C because the XPC API takes blocks.
 //
-// Protocol: the client sends {"op": "hello"} and gets back
-// {"version": FTU_SHM_VERSION, "shm": <xpc_shmem of the shared region>}.
+// Protocol:
+//   {"op": "hello"}                -> {"version": FTU_SHM_VERSION, "shm": <xpc_shmem of the region>}
+//   {"op": "set_rate", "rate": Hz} -> {"ok": bool}. The stream restarts at the new rate;
+//                                     the client watches shm sample_rate and generation.
 // Only coreaudiod's user (_coreaudiod) and the daemon's own user may connect.
 
 #include <dispatch/dispatch.h>
+#include <stdatomic.h>
 #include <string.h>
 #include <unistd.h>
 #include <xpc/xpc.h>
@@ -16,6 +19,16 @@
 static void* g_addr;
 static size_t g_len;
 static xpc_connection_t g_listener;
+static _Atomic uint32_t g_requested_rate;
+
+static int valid_rate(uint64_t r) {
+    return r == 44100 || r == 48000 || r == 88200 || r == 96000;
+}
+
+// Returns the last rate requested over XPC and clears it, or 0 if none is pending.
+uint32_t ftu_xpc_take_requested_rate(void) {
+    return atomic_exchange(&g_requested_rate, 0);
+}
 
 static void handle_message(xpc_connection_t peer, xpc_object_t msg) {
     if (xpc_get_type(msg) != XPC_TYPE_DICTIONARY) {
@@ -33,6 +46,13 @@ static void handle_message(xpc_connection_t peer, xpc_object_t msg) {
             xpc_release(shm);
         }
         xpc_dictionary_set_uint64(reply, "version", FTU_SHM_VERSION);
+    } else if (op && strcmp(op, "set_rate") == 0) {
+        uint64_t rate = xpc_dictionary_get_uint64(msg, "rate");
+        int ok = valid_rate(rate);
+        if (ok) {
+            atomic_store(&g_requested_rate, (uint32_t)rate);
+        }
+        xpc_dictionary_set_bool(reply, "ok", ok);
     } else {
         xpc_dictionary_set_string(reply, "error", "unknown op");
     }

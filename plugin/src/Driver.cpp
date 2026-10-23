@@ -17,6 +17,8 @@
 #include <cmath>
 #include <cstring>
 #include <mutex>
+#include <thread>
+#include <vector>
 
 #include "ftu_shm.h"
 
@@ -30,11 +32,33 @@ static_assert(sizeof(ftu_shm_t) == 168 + 2 * FTU_RING_FRAMES * FTU_CHANNELS * si
 namespace {
 
 constexpr const char* kServiceName = "local.ftu.daemon";
-constexpr UInt32 kSampleRate = 48000;
+constexpr UInt32 kDefaultRate = 48000;
+constexpr UInt32 kRates[] = {44100, 48000, 88200, 96000};
 constexpr UInt32 kZeroTimeStampPeriod = 2048;
-// The daemon keeps about 48 ms of playback queued ahead of capture, so Core Audio must
-// write output at least that far ahead. 64 ms leaves margin. Phase 8 will tighten this.
-constexpr UInt32 kSafetyOffset = kSampleRate * 64 / 1000;
+
+// The daemon keeps 16 ms of playback queued ahead of capture (daemon/src/stream.rs,
+// OUT_XFERS x OUT_PACKETS), so Core Audio must write output at least that far ahead.
+// Capture arrives in 1 ms steps. 24 ms covers both with margin for wakeup jitter.
+UInt32 SafetyOffsetFor(UInt32 rate)
+{
+    return rate * 24 / 1000;
+}
+
+bool ValidRate(Float64 rate)
+{
+    for (UInt32 r : kRates) {
+        if (rate == r) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Current device rate, shared by the device, its streams and the IO handler.
+struct RateState
+{
+    std::atomic<UInt32> rate{kDefaultRate};
+};
 constexpr UInt64 kSeedBase = 1000;  // keeps daemon seeds apart from libASPL's synthetic clock
 
 os_log_t Log()
@@ -62,6 +86,46 @@ public:
             return;
         }
         Connect();
+    }
+
+    // Asks the daemon to stream at `rate` and waits until it does. Not realtime-safe.
+    bool RequestRate(UInt32 rate)
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!Shm() || stale_.load(std::memory_order_acquire)) {
+            Connect();
+        }
+        const ftu_shm_t* s = Shm();
+        if (!s || !conn_) {
+            return false;
+        }
+        if (s->sample_rate.load() == rate && s->running.load()) {
+            return true;
+        }
+        const uint64_t gen = s->generation.load();
+
+        xpc_object_t msg = xpc_dictionary_create(nullptr, nullptr, 0);
+        xpc_dictionary_set_string(msg, "op", "set_rate");
+        xpc_dictionary_set_uint64(msg, "rate", rate);
+        xpc_object_t reply = xpc_connection_send_message_with_reply_sync(conn_, msg);
+        xpc_release(msg);
+        const bool ok = xpc_get_type(reply) == XPC_TYPE_DICTIONARY && xpc_dictionary_get_bool(reply, "ok");
+        xpc_release(reply);
+        if (!ok) {
+            os_log_error(Log(), "daemon refused rate %u", rate);
+            return false;
+        }
+
+        // The daemon restarts the stream: wait for a new generation at the new rate.
+        for (int i = 0; i < 300; i++) {
+            if (s->generation.load() != gen && s->sample_rate.load() == rate && s->running.load()) {
+                os_log(Log(), "rate changed to %u", rate);
+                return true;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        os_log_error(Log(), "timed out waiting for rate %u", rate);
+        return false;
     }
 
 private:
@@ -154,18 +218,139 @@ bool Running(const ftu_shm_t* s)
     return s && s->running.load(std::memory_order_acquire) != 0;
 }
 
+AudioStreamBasicDescription FloatFormat(UInt32 rate)
+{
+    AudioStreamBasicDescription f = {};
+    f.mSampleRate = rate;
+    f.mFormatID = kAudioFormatLinearPCM;
+    f.mFormatFlags = kAudioFormatFlagIsFloat | kAudioFormatFlagsNativeEndian | kAudioFormatFlagIsPacked;
+    f.mBitsPerChannel = 32;
+    f.mChannelsPerFrame = FTU_CHANNELS;
+    f.mBytesPerFrame = FTU_CHANNELS * sizeof(float);
+    f.mFramesPerPacket = 1;
+    f.mBytesPerPacket = f.mBytesPerFrame;
+    return f;
+}
+
+// A stream whose format always follows the device rate. Core Audio may also change the
+// rate by setting a stream format; that is forwarded to the device.
+class FtuStream : public aspl::Stream
+{
+public:
+    FtuStream(std::shared_ptr<const aspl::Context> context,
+        std::shared_ptr<aspl::Device> device,
+        const aspl::StreamParameters& params,
+        std::shared_ptr<RateState> rate)
+        : aspl::Stream(std::move(context), device, params)
+        , device_(device)
+        , rate_(std::move(rate))
+    {
+    }
+
+    AudioStreamBasicDescription GetPhysicalFormat() const override
+    {
+        return FloatFormat(rate_->rate.load());
+    }
+
+    AudioStreamBasicDescription GetVirtualFormat() const override
+    {
+        return FloatFormat(rate_->rate.load());
+    }
+
+    std::vector<AudioStreamRangedDescription> GetAvailablePhysicalFormats() const override
+    {
+        return AllFormats();
+    }
+
+    std::vector<AudioStreamRangedDescription> GetAvailableVirtualFormats() const override
+    {
+        return AllFormats();
+    }
+
+protected:
+    OSStatus SetPhysicalFormatImpl(const AudioStreamBasicDescription& format) override
+    {
+        return FollowRate(format);
+    }
+
+    OSStatus SetVirtualFormatImpl(const AudioStreamBasicDescription& format) override
+    {
+        return FollowRate(format);
+    }
+
+private:
+    static std::vector<AudioStreamRangedDescription> AllFormats()
+    {
+        std::vector<AudioStreamRangedDescription> v;
+        for (UInt32 r : kRates) {
+            AudioStreamRangedDescription d = {};
+            d.mFormat = FloatFormat(r);
+            d.mSampleRateRange.mMinimum = r;
+            d.mSampleRateRange.mMaximum = r;
+            v.push_back(d);
+        }
+        return v;
+    }
+
+    OSStatus FollowRate(const AudioStreamBasicDescription& format)
+    {
+        if (!ValidRate(format.mSampleRate)) {
+            return kAudioDeviceUnsupportedFormatError;
+        }
+        if (auto dev = device_.lock(); dev && format.mSampleRate != rate_->rate.load()) {
+            return dev->SetNominalSampleRateAsync(format.mSampleRate);
+        }
+        return kAudioHardwareNoError;
+    }
+
+    std::weak_ptr<aspl::Device> device_;
+    std::shared_ptr<RateState> rate_;
+};
+
 class FtuDevice : public aspl::Device
 {
 public:
     FtuDevice(std::shared_ptr<const aspl::Context> context,
         const aspl::DeviceParameters& params,
-        std::shared_ptr<DaemonLink> link)
+        std::shared_ptr<DaemonLink> link,
+        std::shared_ptr<RateState> rate)
         : aspl::Device(std::move(context), params)
         , link_(std::move(link))
+        , rate_(std::move(rate))
     {
     }
 
+    void AddFtuStream(std::shared_ptr<FtuStream> stream)
+    {
+        streams_.push_back(stream);
+        AddStreamAsync(stream);
+    }
+
+    UInt32 GetSafetyOffset() const override
+    {
+        return SafetyOffsetFor(rate_->rate.load());
+    }
+
 protected:
+    // Runs inside a HAL configuration change, off the realtime thread.
+    OSStatus SetNominalSampleRateImpl(Float64 rate) override
+    {
+        if (!ValidRate(rate)) {
+            return kAudioDeviceUnsupportedFormatError;
+        }
+        if (!link_->RequestRate(static_cast<UInt32>(rate))) {
+            return kAudioHardwareUnspecifiedError;
+        }
+        rate_->rate.store(static_cast<UInt32>(rate));
+        const OSStatus st = aspl::Device::SetNominalSampleRateImpl(rate);
+        for (auto& s : streams_) {
+            s->NotifyPropertiesChanged({kAudioStreamPropertyPhysicalFormat, kAudioStreamPropertyVirtualFormat});
+        }
+        NotifyPropertyChanged(kAudioDevicePropertySafetyOffset, kAudioObjectPropertyScopeInput);
+        NotifyPropertyChanged(kAudioDevicePropertySafetyOffset, kAudioObjectPropertyScopeOutput);
+        return st;
+    }
+
     // Zero timestamps come from the device clock (daemon anchor). Without a running
     // daemon, fall back to libASPL's host-clock timestamps so clients keep working.
     OSStatus GetZeroTimeStampImpl(UInt32 clientID,
@@ -191,19 +376,29 @@ protected:
 
 private:
     std::shared_ptr<DaemonLink> link_;
+    std::shared_ptr<RateState> rate_;
+    std::vector<std::shared_ptr<FtuStream>> streams_;
 };
 
 class Handler : public aspl::ControlRequestHandler, public aspl::IORequestHandler
 {
 public:
-    explicit Handler(std::shared_ptr<DaemonLink> link)
+    Handler(std::shared_ptr<DaemonLink> link, std::shared_ptr<RateState> rate)
         : link_(std::move(link))
+        , rate_(std::move(rate))
     {
     }
 
     OSStatus OnStartIO() override
     {
         link_->EnsureConnected();
+        // The daemon may be at another rate (its default, or a previous session's).
+        // Core Audio's nominal rate wins.
+        const ftu_shm_t* s = link_->Shm();
+        const UInt32 want = rate_->rate.load();
+        if (s && s->sample_rate.load() != want) {
+            link_->RequestRate(want);
+        }
         return kAudioHardwareNoError;
     }
 
@@ -225,6 +420,7 @@ public:
         const uint64_t written = s->cap_write_pos.load(std::memory_order_acquire);
         if (t + frames > written || written - t > FTU_RING_FRAMES) {
             // Not captured yet, or already overwritten.
+            const_cast<ftu_shm_t*>(s)->plugin_short_reads.fetch_add(1, std::memory_order_relaxed);
             std::memset(bytes, 0, bytesCount);
             return;
         }
@@ -246,6 +442,7 @@ public:
         const uint64_t t = static_cast<uint64_t>(timestamp);
         const uint64_t readPos = shm->play_read_pos.load(std::memory_order_acquire);
         if (t < readPos || t + frames > readPos + FTU_RING_FRAMES) {
+            shm->plugin_late_writes.fetch_add(1, std::memory_order_relaxed);
             return;  // too late, or too far ahead
         }
         CopyToRing(shm->playback, t, static_cast<const float*>(bytes), frames);
@@ -273,49 +470,43 @@ private:
     }
 
     std::shared_ptr<DaemonLink> link_;
+    std::shared_ptr<RateState> rate_;
 };
-
-AudioStreamBasicDescription FloatFormat()
-{
-    AudioStreamBasicDescription f = {};
-    f.mSampleRate = kSampleRate;
-    f.mFormatID = kAudioFormatLinearPCM;
-    f.mFormatFlags = kAudioFormatFlagIsFloat | kAudioFormatFlagsNativeEndian | kAudioFormatFlagIsPacked;
-    f.mBitsPerChannel = 32;
-    f.mChannelsPerFrame = FTU_CHANNELS;
-    f.mBytesPerFrame = FTU_CHANNELS * sizeof(float);
-    f.mFramesPerPacket = 1;
-    f.mBytesPerPacket = f.mBytesPerFrame;
-    return f;
-}
 
 std::shared_ptr<aspl::Driver> CreateDriver()
 {
     auto context = std::make_shared<aspl::Context>();
     auto link = std::make_shared<DaemonLink>();
+    auto rate = std::make_shared<RateState>();
 
     aspl::DeviceParameters params;
     params.Name = "Fast Track Ultra";
     params.Manufacturer = "M-Audio";
     params.DeviceUID = "local.ftu.device";
     params.ModelUID = "local.ftu.model";
-    params.SampleRate = kSampleRate;
+    params.SampleRate = kDefaultRate;
     params.ChannelCount = FTU_CHANNELS;
-    params.SafetyOffset = kSafetyOffset;
+    params.SafetyOffset = SafetyOffsetFor(kDefaultRate);
     params.ZeroTimeStampPeriod = kZeroTimeStampPeriod;
     params.EnableMixing = true;
 
-    auto device = std::make_shared<FtuDevice>(context, params, link);
+    auto device = std::make_shared<FtuDevice>(context, params, link, rate);
+
+    std::vector<AudioValueRange> rates;
+    for (UInt32 r : kRates) {
+        rates.push_back({static_cast<Float64>(r), static_cast<Float64>(r)});
+    }
+    device->SetAvailableSampleRatesAsync(rates);
 
     for (auto dir : {aspl::Direction::Input, aspl::Direction::Output}) {
         aspl::StreamParameters sp;
         sp.Direction = dir;
         sp.StartingChannel = 1;
-        sp.Format = FloatFormat();
-        device->AddStreamAsync(sp);
+        sp.Format = FloatFormat(kDefaultRate);
+        device->AddFtuStream(std::make_shared<FtuStream>(context, device, sp, rate));
     }
 
-    auto handler = std::make_shared<Handler>(link);
+    auto handler = std::make_shared<Handler>(link, rate);
     device->SetControlHandler(handler);
     device->SetIOHandler(handler);
 

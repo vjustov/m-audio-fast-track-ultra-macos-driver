@@ -9,7 +9,7 @@
 //! The control thread only touches atomics.
 
 use crate::rt;
-use crate::shm::{ClockAnchor, Shm, ShmRegion, CHANNELS};
+use crate::shm::{ClockAnchor, Shm, ShmRegion, CHANNELS, RING_FRAMES};
 use crate::usb::{ClockSource, Device, UsbError, EP_CAP, EP_PLAY};
 use libusb1_sys as ffi;
 use libusb1_sys::constants::*;
@@ -22,14 +22,23 @@ use std::time::{Duration, Instant};
 const FRAME_BYTES: usize = CHANNELS * 3;
 const MAX_PACKET: usize = 312; // endpoint wMaxPacketSize, 13 frames
 const MAX_FRAMES_PER_PACKET: usize = MAX_PACKET / FRAME_BYTES;
-// 12 transfers x 32 microframes = 48 ms queued per direction. 8 ms was not enough
-// (protocol.md, streaming prototype).
-const PACKETS_PER_XFER: usize = 32;
-const NUM_XFERS: usize = 12;
+// Queue geometry. One packet per 125 us microframe.
+// Capture: 24 transfers x 8 packets = 24 ms in flight, completing every 1 ms. The queue
+// depth only protects against stalls; latency comes from the 1 ms completion step.
+// Playback: 16 transfers x 8 packets = 16 ms in flight. This is the output lead over
+// capture, and the plugin's safety offset must cover it (plugin/src/Driver.cpp).
+// libusb schedules every submit at least 4 ms ahead, so the queue minus 4 ms is the
+// slack for event-thread stalls. 8 ms (4 ms slack) failed with kIOReturnIsoTooOld.
+const IN_PACKETS: usize = 8;
+const IN_XFERS: usize = 24;
+const OUT_PACKETS: usize = 8;
+const OUT_XFERS: usize = 16;
 const FIFO_LEN: usize = 4096;
 const S24_SCALE: f32 = 8_388_608.0;
-const DLL_B: f64 = 0.0178;
-const DLL_C: f64 = 0.000158;
+// Clock loop for 1 ms updates, 0.5 Hz bandwidth: omega = 2*pi*0.5*0.001,
+// b = sqrt(2)*omega, c = omega^2.
+const DLL_B: f64 = 0.004443;
+const DLL_C: f64 = 0.00000987;
 
 #[derive(Clone, Copy, Debug)]
 pub struct StreamConfig {
@@ -60,6 +69,10 @@ struct Engine {
 
     cap_pos: u64,
     play_pos: u64,
+    // Playback position minus capture position that the stream should hold: the
+    // prefilled playback queue. Drift away from it means the device consumes at a
+    // different rate than we send, or that fallback packets were used.
+    target_lead: i64,
 
     // Clock smoothing (sample time -> host ticks).
     clock_init: bool,
@@ -80,32 +93,48 @@ impl Engine {
         unsafe { &*self.shm }
     }
 
+    /// Frames for the next playback packet: the size of the matching capture packet
+    /// (implicit feedback), corrected by one frame when the playback lead drifts more
+    /// than one packet from its target.
     fn next_frame_count(&mut self) -> usize {
-        if self.fifo_tail != self.fifo_head {
+        let mut n = if self.fifo_tail != self.fifo_head {
             let n = self.fifo[self.fifo_tail % FIFO_LEN] as usize;
             self.fifo_tail += 1;
-            return n;
+            n
+        } else {
+            self.stats.fallback_packets += 1;
+            self.nominal_acc += self.rate as f64 / 8000.0;
+            let n = self.nominal_acc as usize;
+            self.nominal_acc -= n as f64;
+            n
+        };
+        if self.cap_pos > 0 {
+            let err = self.play_pos as i64 - self.cap_pos as i64 - self.target_lead;
+            let per_packet = (self.rate / 8000) as i64;
+            if err > per_packet {
+                n = n.saturating_sub(1);
+            } else if err < -per_packet {
+                n += 1;
+            }
         }
-        self.stats.fallback_packets += 1;
-        self.nominal_acc += self.rate as f64 / 8000.0;
-        let n = self.nominal_acc as usize;
-        self.nominal_acc -= n as f64;
-        n
+        n.clamp(1, MAX_FRAMES_PER_PACKET)
     }
 
     /// Fills a playback transfer from the playback ring and zeroes what it consumed.
     fn prepare_out(&mut self, t: *mut ffi::libusb_transfer) {
         let shm = self.shm;
-        // SAFETY: t is an iso transfer allocated with PACKETS_PER_XFER descriptors and a
-        // buffer of MAX_PACKET * PACKETS_PER_XFER bytes; frames <= MAX_FRAMES_PER_PACKET.
+        // SAFETY: t is an iso transfer with num_iso_packets descriptors and a buffer of
+        // MAX_PACKET bytes per packet; frames <= MAX_FRAMES_PER_PACKET.
         unsafe {
             let shm = &*shm;
             let write_pos = shm.play_write_pos.load(Ordering::Acquire);
             let mut offset = 0usize;
-            for i in 0..PACKETS_PER_XFER {
+            for i in 0..(*t).num_iso_packets as usize {
                 let frames = self.next_frame_count().min(MAX_FRAMES_PER_PACKET);
-                // write_pos 0 means no writer yet (startup prefill): silence, not an underrun.
-                if write_pos != 0 && write_pos < self.play_pos + frames as u64 {
+                // Count only while a writer is active: write_pos within one ring of the
+                // read position. An idle or absent writer is silence, not an underrun.
+                let active = write_pos != 0 && write_pos + RING_FRAMES as u64 > self.play_pos;
+                if active && write_pos < self.play_pos + frames as u64 {
                     shm.play_underruns.fetch_add(1, Ordering::Relaxed);
                 }
                 let out = (*t).buffer.add(offset);
@@ -166,8 +195,7 @@ impl Engine {
     }
 
     /// Tracks host time per device frame with a second-order delay-locked loop.
-    /// Transfer completions arrive every 4 ms with scheduling jitter. Loop bandwidth
-    /// 0.5 Hz: omega = 2*pi*0.5*0.004, b = sqrt(2)*omega, c = omega^2.
+    /// Capture completions arrive every 1 ms with scheduling jitter.
     fn update_clock(&mut self, now: u64) {
         let now = now as f64;
         if !self.clock_init {
@@ -201,8 +229,16 @@ impl Engine {
             self.inflight.fetch_sub(1, Ordering::AcqRel);
             return;
         }
-        // SAFETY: t is a completed transfer owned by this engine.
-        let r = unsafe { ffi::libusb_submit_transfer(t) };
+        // SAFETY: t is a completed transfer owned by this engine. A failed submit leaves it
+        // idle, so retrying is safe; libusb reschedules it a few frames from now.
+        let mut r = unsafe { ffi::libusb_submit_transfer(t) };
+        for _ in 0..2 {
+            if r >= 0 {
+                break;
+            }
+            self.shm().usb_errors.fetch_add(1, Ordering::Relaxed);
+            r = unsafe { ffi::libusb_submit_transfer(t) };
+        }
         if r < 0 {
             eprintln!("{what} resubmit failed: {}", UsbError { op: "submit", code: r });
             self.shm().usb_errors.fetch_add(1, Ordering::Relaxed);
@@ -287,6 +323,7 @@ impl Stream {
             nominal_acc: 0.0,
             cap_pos: 0,
             play_pos: 0,
+            target_lead: (OUT_XFERS * OUT_PACKETS) as i64 * rate as i64 / 8000,
             clock_init: false,
             anchor_sample: 0,
             anchor_host: 0.0,
@@ -297,21 +334,25 @@ impl Stream {
         let handle = dev.handle();
         let ctx = dev.ctx() as usize;
         let ep = engine.as_mut() as *mut Engine;
-        let mut xfers = Transfers(Vec::with_capacity(2 * NUM_XFERS));
+        let mut xfers = Transfers(Vec::with_capacity(IN_XFERS + OUT_XFERS));
         // SAFETY: transfers are allocated, filled and submitted before the event thread
         // starts; libusb owns them while in flight. Buffers live in `xfers`.
         unsafe {
-            for (endpoint, cb) in [(EP_CAP, in_cb as ffi::libusb_transfer_cb_fn), (EP_PLAY, out_cb)] {
-                for _ in 0..NUM_XFERS {
-                    let t = ffi::libusb_alloc_transfer(PACKETS_PER_XFER as c_int);
-                    let mut buf = vec![0u8; MAX_PACKET * PACKETS_PER_XFER];
+            let plan = [
+                (EP_CAP, in_cb as ffi::libusb_transfer_cb_fn, IN_XFERS, IN_PACKETS),
+                (EP_PLAY, out_cb, OUT_XFERS, OUT_PACKETS),
+            ];
+            for (endpoint, cb, count, packets) in plan {
+                for _ in 0..count {
+                    let t = ffi::libusb_alloc_transfer(packets as c_int);
+                    let mut buf = vec![0u8; MAX_PACKET * packets];
                     ffi::libusb_fill_iso_transfer(
                         t,
                         handle,
                         endpoint,
                         buf.as_mut_ptr(),
                         buf.len() as c_int,
-                        PACKETS_PER_XFER as c_int,
+                        packets as c_int,
                         cb,
                         ep as *mut std::ffi::c_void,
                         1000,
@@ -337,8 +378,8 @@ impl Stream {
         let thread = std::thread::Builder::new()
             .name("ftu-usb".into())
             .spawn(move || {
-                // Transfers complete every 4 ms; the work per completion is small.
-                if !rt::make_realtime(4_000_000, 1_000_000) {
+                // Transfers complete every 1 ms; the work per completion is small.
+                if !rt::make_realtime(1_000_000, 300_000) {
                     eprintln!("warning: realtime scheduling refused");
                 }
                 let ctx = ctx as *mut ffi::libusb_context;

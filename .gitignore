@@ -11,3 +11,4 @@ __pycache__/
 /captures/*.wav
 
 .DS_Store
+/proto/build/

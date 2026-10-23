@@ -68,6 +68,9 @@ impl Device {
         let mut ctx = std::ptr::null_mut();
         // SAFETY: out-pointer initialised by libusb on success.
         check("libusb_init", unsafe { ffi::libusb_init(&mut ctx) })?;
+        // libusb prints the underlying IOKit error only at error log level or above.
+        // SAFETY: ctx valid; option takes one int argument.
+        unsafe { ffi::libusb_set_option(ctx, ffi::constants::LIBUSB_OPTION_LOG_LEVEL, ffi::constants::LIBUSB_LOG_LEVEL_ERROR) };
         // SAFETY: ctx valid.
         let handle = unsafe { ffi::libusb_open_device_with_vid_pid(ctx, VID, PID) };
         if handle.is_null() {
