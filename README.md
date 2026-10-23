@@ -105,6 +105,10 @@ daemon/target/release/ftu-daemon test --seconds 10 --record /tmp/capture.wav
 - [`docs/mac-driver-inventory.md`](docs/mac-driver-inventory.md), [`docs/windows-driver-inventory.md`](docs/windows-driver-inventory.md): structure of the vendor drivers.
 - [`docs/firmware.md`](docs/firmware.md): notes toward patching the firmware's MIDI bugs. Exploratory.
 
+## How this was built
+
+This project was vibe coded: the code, the documentation and the analysis were written by an AI coding agent ([Claude Code](https://claude.com/claude-code)), steered and tested on real hardware by the author. The vendor drivers were reverse engineered with [REA](https://github.com/morluto/rea), an MCP toolkit for binary analysis, here driving the Hopper disassembler. Every protocol claim in [`docs/protocol.md`](docs/protocol.md) is tagged with its source (Linux driver, vendor driver analysis, or a hardware test), and the hardware tests are logged in `captures/`. Treat untested parts as unverified.
+
 ## Legal notes
 
 - **No vendor code, binaries, firmware or manuals are included.** The repository holds only original code and documentation of observed behavior. Vendor drivers and the manual are available from M-Audio's support site.
