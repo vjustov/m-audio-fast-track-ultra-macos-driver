@@ -1,0 +1,13 @@
+# Vendor drivers, manual and extracted binaries: copyrighted, never commit.
+/vendor/
+
+# Build output
+/daemon/target/
+/plugin/build/
+/proto/ftu_stream
+__pycache__/
+
+# Large audio captures (text logs and descriptor dumps are kept)
+/captures/*.wav
+
+.DS_Store
