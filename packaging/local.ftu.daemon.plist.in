@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>local.ftu.daemon</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Library/Application Support/FastTrackUltra/ftu-daemon</string>
+		<string>run</string>
+	</array>
+	<!-- System domain so coreaudiod can look up the service; runs as the user, not root. -->
+	<key>UserName</key>
+	<string>@USER@</string>
+	<key>MachServices</key>
+	<dict>
+		<key>local.ftu.daemon</key>
+		<true/>
+	</dict>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>ProcessType</key>
+	<string>Interactive</string>
+	<key>StandardErrorPath</key>
+	<string>@LOG@</string>
+</dict>
+</plist>
