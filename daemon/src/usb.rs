@@ -138,6 +138,13 @@ impl Device {
         Ok(d[0] as u32 | (d[1] as u32) << 8 | (d[2] as u32) << 16)
     }
 
+    /// UAC1 SET_CUR to a unit on the control interface. Units 5 to 9: docs/protocol.md.
+    pub fn set_cur(&self, unit: u8, control: u8, channel: u8, data: &[u8]) -> Result<(), UsbError> {
+        let mut d = data.to_vec();
+        let value = (control as u16) << 8 | channel as u16;
+        self.control(0x21, 0x01, value, (unit as u16) << 8, &mut d).map(|_| ())
+    }
+
     /// Meters and status (GET_MEM). Returns the snapshot taken at the previous call,
     /// so callers that need current values read twice.
     pub fn read_meters_raw(&self) -> Result<[i16; 27], UsbError> {

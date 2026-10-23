@@ -61,16 +61,16 @@ Rows marked "host?" may be computed in the control panel and sent as raw matrix 
 
 | ID | Feature | Manual | Linux | Static | Capture | Done |
 | --- | --- | --- | --- | --- | --- | --- |
-| X1 | Per source, per bus: level fader | p.10 | ✓ L3 | ✓ D | ✓ dB×256, max 0 dB | |
-| X2 | Per source, per bus: pan (host?) | p.10 | | ✓ P, D (host) | | |
-| X3 | Per source, per bus: mute (host?) | p.10 | | ? D (host) | | |
-| X4 | Per source, per bus: solo (host?) | p.10 | | ? D (host) | | |
-| X5 | Per source pair: link (host?) | p.10 | | ✓ P (balance law) | | |
-| X6 | Per source, buses 1/2 and 3/4 only: effect send level | p.10 | ? L3 | ✓ D (one per source) | ✓ u5 ctl9 | |
-| X7 | Per bus: output fader | p.11 | | | ✓ unit 9 ctl2 = per-output gain, ctl1 = mute (ch 3 tested) | |
+| X1 | Per source, per bus: level fader | p.10 | ✓ L3 | ✓ D | ✓ dB×256, max 0 dB | ✓ daemon |
+| X2 | Per source, per bus: pan (host?) | p.10 | | ✓ P, D (host) | | ✓ daemon |
+| X3 | Per source, per bus: mute (host?) | p.10 | | ? D (host) | | ✓ daemon |
+| X4 | Per source, per bus: solo (host?) | p.10 | | ? D (host) | | ✓ daemon |
+| X5 | Per source pair: link (host?) | p.10 | | ✓ P (balance law) | | ✓ daemon |
+| X6 | Per source, buses 1/2 and 3/4 only: effect send level | p.10 | ? L3 | ✓ D (one per source) | ✓ u5 ctl9 | ✓ daemon |
+| X7 | Per bus: output fader | p.11 | | | ✓ unit 9 ctl2 = per-output gain, ctl1 = mute (ch 3 tested) | ✓ daemon (unit 9) |
 | X8 | Buses 1/2 and 3/4 only: DSP bypass | p.11 | | | | |
 | X9 | Mixer is independent of the recording path | p.10 | | | | |
-| X10 | Effect return level into outputs 1 to 4 (not in manual) | n/a | ✓ L3 | ✓ D (ctl 2) | ✓ by ear: ctl 2 (or 7) ch 1-4 = out 1-4, ctl 1 = mute. Not in meters | |
+| X10 | Effect return level into outputs 1 to 4 (not in manual) | n/a | ✓ L3 | ✓ D (ctl 2) | ✓ by ear: ctl 2 (or 7) ch 1-4 = out 1-4, ctl 1 = mute. Not in meters | ✓ daemon |
 
 ## DSP effects
 
@@ -78,17 +78,17 @@ Only sends from buses 1/2 and 3/4 reach the DSP. The manual gives no parameter r
 
 | ID | Feature | Manual | Linux | Static | Capture | Done |
 | --- | --- | --- | --- | --- | --- | --- |
-| E1 | Preset: Room 1 | p.13 | ✓ L3 | ✓ D | ✓ (selectable; rooms sound alike) | |
-| E2 | Preset: Room 2 | p.13 | ✓ L3 | ✓ D | ✓ (selectable; rooms sound alike) | |
-| E3 | Preset: Room 3 | p.13 | ✓ L3 | ✓ D | ✓ (selectable; rooms sound alike) | |
-| E4 | Preset: Hall 1 | p.13 | ✓ L3 | ✓ D | ✓ | |
-| E5 | Preset: Hall 2 | p.13 | ✓ L3 | ✓ D | ✓ (selectable; rooms sound alike) | |
-| E6 | Preset: Plate | p.13 | ✓ L3 | ✓ D | ✓ (selectable; rooms sound alike) | |
-| E7 | Preset: Delay | p.13 | ✓ L3 | ✓ D | ✓ (selectable; rooms sound alike) | |
-| E8 | Preset: Echo | p.13 | ✓ L3 | ✓ D | ✓ (selectable; rooms sound alike) | |
-| E9 | Parameter: Duration | p.13 | ✓ L5 | ✓ D | ✓ by ear | |
-| E10 | Parameter: Feedback | p.13 | ✓ L5 | ✓ D | ✓ by ear | |
-| E11 | Parameter: Volume | p.13 | ✓ L5 | ✓ D | ✓ | |
+| E1 | Preset: Room 1 | p.13 | ✓ L3 | ✓ D | ✓ (selectable; rooms sound alike) | ✓ |
+| E2 | Preset: Room 2 | p.13 | ✓ L3 | ✓ D | ✓ (selectable; rooms sound alike) | ✓ |
+| E3 | Preset: Room 3 | p.13 | ✓ L3 | ✓ D | ✓ (selectable; rooms sound alike) | ✓ |
+| E4 | Preset: Hall 1 | p.13 | ✓ L3 | ✓ D | ✓ | ✓ |
+| E5 | Preset: Hall 2 | p.13 | ✓ L3 | ✓ D | ✓ (selectable; rooms sound alike) | ✓ |
+| E6 | Preset: Plate | p.13 | ✓ L3 | ✓ D | ✓ (selectable; rooms sound alike) | ✓ |
+| E7 | Preset: Delay | p.13 | ✓ L3 | ✓ D | ✓ (selectable; rooms sound alike) | ✓ |
+| E8 | Preset: Echo | p.13 | ✓ L3 | ✓ D | ✓ (selectable; rooms sound alike) | ✓ |
+| E9 | Parameter: Duration | p.13 | ✓ L5 | ✓ D | ✓ by ear | ✓ |
+| E10 | Parameter: Feedback | p.13 | ✓ L5 | ✓ D | ✓ by ear | ✓ |
+| E11 | Parameter: Volume | p.13 | ✓ L5 | ✓ D | ✓ | ✓ |
 
 ## Metering
 

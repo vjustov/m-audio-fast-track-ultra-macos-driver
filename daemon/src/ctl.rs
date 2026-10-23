@@ -1,0 +1,238 @@
+//! Control service: owns the mixer state, answers XPC control requests, and pushes
+//! changes to the device from the service loop.
+//!
+//! Requests and replies are JSON strings carried in the XPC "ctl" op (xpc_shim.c):
+//!   {"get": "state"}                       -> the mixer state (mixer.rs)
+//!   {"get": "meters"}                      -> latest meter snapshot
+//!   {"set": [["bus1.in1.level", "-6"], ..]} -> {"ok": true} or {"error": ".."}; all or nothing
+//!   {"reset": true}                        -> defaults
+
+use crate::mixer::{Ctl, Mixer};
+use crate::usb::Device;
+use serde_json::{json, Value};
+use std::collections::HashMap;
+use std::ffi::{c_char, CStr, CString};
+use std::path::PathBuf;
+use std::sync::{Condvar, Mutex, OnceLock};
+use std::time::{Duration, Instant};
+
+const METER_PERIOD: Duration = Duration::from_millis(100);
+
+struct Meters {
+    words: [i16; 27],
+    at: Instant,
+}
+
+pub struct Control {
+    mixer: Mutex<Mixer>,
+    path: Option<PathBuf>,
+    dirty: Mutex<bool>,
+    wake: Condvar,
+    meters: Mutex<Option<Meters>>,
+}
+
+static CONTROL: OnceLock<Control> = OnceLock::new();
+
+/// `~/Library/Application Support/FastTrackUltra/mixer.json` for the daemon's user.
+fn state_path() -> Option<PathBuf> {
+    // SAFETY: getpwuid returns a pointer to static storage or null; read immediately.
+    let home = unsafe {
+        let pw = libc::getpwuid(libc::getuid());
+        if pw.is_null() {
+            return None;
+        }
+        CStr::from_ptr((*pw).pw_dir).to_string_lossy().into_owned()
+    };
+    Some(PathBuf::from(home).join("Library/Application Support/FastTrackUltra/mixer.json"))
+}
+
+fn load(path: &Option<PathBuf>) -> Mixer {
+    let Some(p) = path else { return Mixer::default() };
+    match std::fs::read_to_string(p) {
+        Ok(s) => match serde_json::from_str::<Mixer>(&s) {
+            Ok(mut m) => {
+                m.normalize();
+                eprintln!("ftu-daemon: mixer state loaded from {}", p.display());
+                m
+            }
+            Err(e) => {
+                let bad = p.with_extension("json.bad");
+                let _ = std::fs::rename(p, &bad);
+                eprintln!("ftu-daemon: {} unreadable ({e}), moved to {}, using defaults", p.display(), bad.display());
+                Mixer::default()
+            }
+        },
+        Err(_) => Mixer::default(),
+    }
+}
+
+impl Control {
+    /// Loads the saved state. Call once before the XPC listener starts.
+    pub fn init() -> &'static Control {
+        CONTROL.get_or_init(|| {
+            let path = state_path();
+            Control {
+                mixer: Mutex::new(load(&path)),
+                path,
+                dirty: Mutex::new(true),
+                wake: Condvar::new(),
+                meters: Mutex::new(None),
+            }
+        })
+    }
+
+    fn save(&self, m: &Mixer) {
+        let Some(p) = &self.path else { return };
+        let write = || -> std::io::Result<()> {
+            std::fs::create_dir_all(p.parent().unwrap())?;
+            let tmp = p.with_extension("json.tmp");
+            std::fs::write(&tmp, serde_json::to_vec_pretty(m)?)?;
+            std::fs::rename(&tmp, p)
+        };
+        if let Err(e) = write() {
+            eprintln!("ftu-daemon: saving {} failed: {e}", p.display());
+        }
+    }
+
+    fn changed(&self, m: &Mixer) {
+        self.save(m);
+        *self.dirty.lock().unwrap() = true;
+        self.wake.notify_all();
+    }
+
+    fn handle(&self, req: &str) -> Value {
+        let req: Value = match serde_json::from_str(req) {
+            Ok(v) => v,
+            Err(e) => return json!({ "error": format!("bad request: {e}") }),
+        };
+        if let Some(what) = req.get("get").and_then(Value::as_str) {
+            return match what {
+                "state" => serde_json::to_value(&*self.mixer.lock().unwrap()).unwrap(),
+                "meters" => self.meters_json(),
+                _ => json!({ "error": format!("unknown get '{what}'") }),
+            };
+        }
+        if let Some(list) = req.get("set").and_then(Value::as_array) {
+            let mut m = self.mixer.lock().unwrap();
+            let mut next = m.clone();
+            for item in list {
+                let pair = item.as_array().map(|a| (a.first().and_then(Value::as_str), a.get(1).and_then(Value::as_str)));
+                let (Some((Some(path), Some(value))), true) = (pair, item.as_array().is_some_and(|a| a.len() == 2)) else {
+                    return json!({ "error": "set expects [[path, value], ...] with string values" });
+                };
+                if let Err(e) = next.set(path, value) {
+                    return json!({ "error": e });
+                }
+            }
+            if next != *m {
+                *m = next;
+                self.changed(&m);
+            }
+            return json!({ "ok": true });
+        }
+        if req.get("reset").and_then(Value::as_bool) == Some(true) {
+            let mut m = self.mixer.lock().unwrap();
+            *m = Mixer::default();
+            self.changed(&m);
+            return json!({ "ok": true });
+        }
+        json!({ "error": "unknown request" })
+    }
+
+    fn meters_json(&self) -> Value {
+        match &*self.meters.lock().unwrap() {
+            Some(mt) => {
+                let w = &mt.words;
+                json!({
+                    "in": &w[0..8],
+                    "daw": &w[8..16],
+                    "out": &w[16..24],
+                    "extra": &w[24..26],
+                    "status": w[26] as u16,
+                    "age_ms": mt.at.elapsed().as_millis() as u64,
+                })
+            }
+            None => json!({ "error": "no meters yet (device not connected?)" }),
+        }
+    }
+
+    /// Called from the service loop while a device is open. Sends state changes that
+    /// are not yet on the device (`sent` caches what is), polls the meters, and waits
+    /// up to `timeout` for the next change.
+    pub fn service(&self, dev: &Device, sent: &mut HashMap<(u8, u8, u8), Vec<u8>>, timeout: Duration) {
+        let poll_due = self.meters.lock().unwrap().as_ref().map_or(true, |m| m.at.elapsed() >= METER_PERIOD);
+        if poll_due {
+            if let Ok(words) = dev.read_meters_raw() {
+                let prev = self.meters.lock().unwrap().replace(Meters { words, at: Instant::now() });
+                // Power mode change (status bits 0 and 1): the DSP restarts, so resend everything.
+                if prev.is_some_and(|p| (p.words[26] ^ words[26]) & 0x3 != 0) {
+                    eprintln!("ftu-daemon: power mode changed (status {:#06x}), restoring mixer", words[26] as u16);
+                    sent.clear();
+                }
+            }
+        }
+        let pending = std::mem::take(&mut *self.dirty.lock().unwrap());
+        if pending || sent.is_empty() {
+            let controls: Vec<Ctl> = self.mixer.lock().unwrap().controls();
+            let mut n = 0;
+            let mut failed = false;
+            for c in controls {
+                if sent.get(&c.key()) == Some(&c.data) {
+                    continue;
+                }
+                match dev.set_cur(c.unit, c.control, c.channel, &c.data) {
+                    Ok(()) => {
+                        sent.insert(c.key(), c.data);
+                        n += 1;
+                    }
+                    Err(e) => {
+                        eprintln!("ftu-daemon: unit {} control {} channel {}: {e}", c.unit, c.control, c.channel);
+                        failed = true;
+                        break;
+                    }
+                }
+            }
+            if n > 20 {
+                eprintln!("ftu-daemon: wrote {n} mixer controls");
+            }
+            if failed {
+                // Retry on a later pass, without spinning.
+                let mut dirty = self.dirty.lock().unwrap();
+                *dirty = true;
+                let _ = self.wake.wait_timeout(dirty, timeout);
+                return;
+            }
+        }
+        let dirty = self.dirty.lock().unwrap();
+        if !*dirty {
+            let _ = self.wake.wait_timeout(dirty, timeout.min(METER_PERIOD));
+        }
+    }
+
+    /// Called when the device goes away: meters are no longer valid.
+    pub fn device_lost(&self) {
+        self.meters.lock().unwrap().take();
+    }
+}
+
+/// XPC entry point (xpc_shim.c). Returns a JSON reply to be freed with `ftu_ctl_free`.
+#[no_mangle]
+pub extern "C" fn ftu_ctl_request(req: *const c_char) -> *mut c_char {
+    let reply = match (CONTROL.get(), req.is_null()) {
+        (Some(c), false) => {
+            // SAFETY: non-null NUL-terminated string from xpc_dictionary_get_string.
+            let s = unsafe { CStr::from_ptr(req) }.to_string_lossy();
+            c.handle(&s)
+        }
+        _ => json!({ "error": "control not ready" }),
+    };
+    CString::new(reply.to_string()).unwrap_or_default().into_raw()
+}
+
+#[no_mangle]
+pub extern "C" fn ftu_ctl_free(s: *mut c_char) {
+    if !s.is_null() {
+        // SAFETY: allocated by CString::into_raw in ftu_ctl_request.
+        drop(unsafe { CString::from_raw(s) });
+    }
+}

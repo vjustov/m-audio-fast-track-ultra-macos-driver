@@ -12,9 +12,9 @@ Work in progress. Tested on macOS 26 (Tahoe) on an M3 Max with firmware 1.51.
 | --- | --- |
 | USB protocol | Mapped and confirmed on hardware: mixer, effects, effect returns, output gain, clock source, sample rates, meters. See [`docs/protocol.md`](docs/protocol.md). |
 | Audio streaming | Works from user space: 8 in, 8 out, 24-bit, 44.1 to 96 kHz, verified bit-level through the device's internal S/PDIF loopback. |
-| Helper daemon (Rust) | Streaming core works. XPC service built. |
-| HAL plugin (C++) | Built. Not yet tested inside Core Audio. |
-| Control panel | Not started. |
+| Helper daemon (Rust) | Streaming, XPC service and mixer control work. Mixer state is saved and restored after a power cycle. CLI: `ftu-daemon ctl`, see [`daemon/README.md`](daemon/README.md). |
+| HAL plugin (C++) | Works in Core Audio and a DAW (Ableton Live Lite): 8 in, 8 out, all four sample rates, 24 ms output latency. |
+| Control panel | Not started. The daemon's control API is ready for it. |
 | MIDI | Works through macOS's built-in class driver. Firmware bug: see Known issues. |
 
 Progress against the original control panel's features is tracked in [`docs/features.md`](docs/features.md).

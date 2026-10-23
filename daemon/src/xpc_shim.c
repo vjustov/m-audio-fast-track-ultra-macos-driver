@@ -4,6 +4,7 @@
 //   {"op": "hello"}                -> {"version": FTU_SHM_VERSION, "shm": <xpc_shmem of the region>}
 //   {"op": "set_rate", "rate": Hz} -> {"ok": bool}. The stream restarts at the new rate;
 //                                     the client watches shm sample_rate and generation.
+//   {"op": "ctl", "request": JSON}  -> {"response": JSON}. Mixer control, see ctl.rs.
 // Only coreaudiod's user (_coreaudiod) and the daemon's own user may connect.
 
 #include <dispatch/dispatch.h>
@@ -20,6 +21,10 @@ static void* g_addr;
 static size_t g_len;
 static xpc_connection_t g_listener;
 static _Atomic uint32_t g_requested_rate;
+
+// Implemented in Rust (ctl.rs).
+char* ftu_ctl_request(const char* request);
+void ftu_ctl_free(char* reply);
 
 static int valid_rate(uint64_t r) {
     return r == 44100 || r == 48000 || r == 88200 || r == 96000;
@@ -53,6 +58,10 @@ static void handle_message(xpc_connection_t peer, xpc_object_t msg) {
             atomic_store(&g_requested_rate, (uint32_t)rate);
         }
         xpc_dictionary_set_bool(reply, "ok", ok);
+    } else if (op && strcmp(op, "ctl") == 0) {
+        char* response = ftu_ctl_request(xpc_dictionary_get_string(msg, "request"));
+        xpc_dictionary_set_string(reply, "response", response);
+        ftu_ctl_free(response);
     } else {
         xpc_dictionary_set_string(reply, "error", "unknown op");
     }
@@ -98,4 +107,33 @@ int ftu_xpc_listen(const char* name, void* addr, size_t len) {
     });
     xpc_connection_resume(g_listener);
     return 0;
+}
+
+// Client side, for `ftu-daemon ctl`: sends one ctl request and waits for the reply.
+// Returns a malloc'd JSON string (free with free()) or NULL if the daemon is unreachable.
+char* ftu_xpc_ctl_call(const char* name, const char* request) {
+    xpc_connection_t conn = xpc_connection_create_mach_service(name, NULL, 0);
+    if (!conn) {
+        return NULL;
+    }
+    xpc_connection_set_event_handler(conn, ^(xpc_object_t e) {
+        (void)e;
+    });
+    xpc_connection_resume(conn);
+    xpc_object_t msg = xpc_dictionary_create(NULL, NULL, 0);
+    xpc_dictionary_set_string(msg, "op", "ctl");
+    xpc_dictionary_set_string(msg, "request", request);
+    xpc_object_t reply = xpc_connection_send_message_with_reply_sync(conn, msg);
+    char* out = NULL;
+    if (xpc_get_type(reply) == XPC_TYPE_DICTIONARY) {
+        const char* r = xpc_dictionary_get_string(reply, "response");
+        if (r) {
+            out = strdup(r);
+        }
+    }
+    xpc_release(reply);
+    xpc_release(msg);
+    xpc_connection_cancel(conn);
+    xpc_release(conn);
+    return out;
 }

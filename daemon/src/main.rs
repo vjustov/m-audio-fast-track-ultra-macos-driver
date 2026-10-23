@@ -3,9 +3,12 @@
 //! Subcommands:
 //!   run   Serve the HAL plugin: XPC service plus streaming, reconnecting to the device.
 //!         Started by launchd (packaging/local.ftu.daemon.plist).
+//!   ctl   Mixer control client: talks to the running daemon over XPC.
 //!   test  Streaming test harness that stands in for the plugin: tone into the
 //!         playback ring, capture ring to a WAV file.
 
+mod ctl;
+mod mixer;
 mod rt;
 mod shm;
 mod stream;
@@ -14,6 +17,7 @@ mod usb;
 use shm::{ShmRegion, CHANNELS, RING_FRAMES};
 use std::io::{Seek, SeekFrom, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use stream::{Stream, StreamConfig};
@@ -60,7 +64,7 @@ fn parse_args(mut it: impl Iterator<Item = String>) -> Args {
 
 fn usage() -> ! {
     eprintln!(
-        "usage: ftu-daemon run\n       ftu-daemon test [--rate HZ] [--seconds S] [--spdif] [--tone-channel 0-8] [--freq HZ] [--dbfs DB] [--record out.wav]\n\
+        "usage: ftu-daemon run\n       ftu-daemon ctl get [state|meters] | set PATH VALUE [PATH VALUE ...] | reset\n       ftu-daemon test [--rate HZ] [--seconds S] [--spdif] [--tone-channel 0-8] [--freq HZ] [--dbfs DB] [--record out.wav]\n\
          Tone channel 0 disables the tone."
     );
     std::process::exit(2)
@@ -231,11 +235,13 @@ const DEFAULT_RATE: u32 = 48000;
 extern "C" {
     fn ftu_xpc_listen(name: *const libc::c_char, addr: *mut libc::c_void, len: usize) -> libc::c_int;
     fn ftu_xpc_take_requested_rate() -> u32;
+    fn ftu_xpc_ctl_call(name: *const libc::c_char, request: *const libc::c_char) -> *mut libc::c_char;
 }
 
 /// Runs forever: holds the shared memory, serves XPC, and keeps the device streaming.
 fn run_service() -> Result<(), Box<dyn std::error::Error>> {
     let shm = Arc::new(ShmRegion::new()?);
+    let control = ctl::Control::init();
     let name = std::ffi::CString::new(SERVICE_NAME)?;
     // SAFETY: the region lives until process exit (shm is never dropped in this loop).
     if unsafe { ftu_xpc_listen(name.as_ptr(), shm.as_ptr() as *mut libc::c_void, shm.len()) } != 0 {
@@ -244,10 +250,14 @@ fn run_service() -> Result<(), Box<dyn std::error::Error>> {
     eprintln!("ftu-daemon: serving {SERVICE_NAME}, shared memory {} bytes", shm.len());
 
     let mut rate = DEFAULT_RATE;
+    // Controls already on the device. Cleared whenever the device may have reset.
+    let mut sent = HashMap::new();
     loop {
         let mut dev = match Device::open() {
             Ok(d) => d,
             Err(_) => {
+                control.device_lost();
+                sent.clear();
                 // Keep honouring rate requests while the device is away.
                 // SAFETY: plain C function, no arguments.
                 let r = unsafe { ftu_xpc_take_requested_rate() };
@@ -258,6 +268,8 @@ fn run_service() -> Result<(), Box<dyn std::error::Error>> {
                 continue;
             }
         };
+        // Restore the mixer before audio starts.
+        control.service(&dev, &mut sent, Duration::ZERO);
         let cfg = StreamConfig { sample_rate: rate, clock: ClockSource::Internal };
         match Stream::start(&mut dev, shm.clone(), cfg) {
             Ok(stream) => {
@@ -290,7 +302,7 @@ fn run_service() -> Result<(), Box<dyn std::error::Error>> {
                         new_rate = Some(r);
                         break;
                     }
-                    std::thread::sleep(Duration::from_millis(50));
+                    control.service(&dev, &mut sent, Duration::from_millis(50));
                 }
                 let stats = stream.stop(&mut dev);
                 match new_rate {
@@ -301,15 +313,74 @@ fn run_service() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     None => {
                         eprintln!("ftu-daemon: stream stopped ({stats:?}), restarting");
+                        sent.clear(); // a replug or power cycle also stops the stream
                         continue; // device handle still open; restart right away
                     }
                 }
             }
-            Err(e) => eprintln!("ftu-daemon: start failed: {e}"),
+            Err(e) => {
+                eprintln!("ftu-daemon: start failed: {e}");
+                sent.clear();
+            }
         }
         drop(dev);
         std::thread::sleep(Duration::from_secs(1));
     }
+}
+
+/// `ftu-daemon ctl ...`: builds one request, prints the reply. Returns the exit code.
+fn run_ctl(args: Vec<String>) -> i32 {
+    let req = match args.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
+        ["get"] | ["get", "state"] => serde_json::json!({ "get": "state" }),
+        ["get", "meters"] | ["meters"] => serde_json::json!({ "get": "meters" }),
+        ["reset"] => serde_json::json!({ "reset": true }),
+        ["set", rest @ ..] if !rest.is_empty() && rest.len() % 2 == 0 => {
+            serde_json::json!({ "set": rest.chunks(2).map(|p| [p[0], p[1]]).collect::<Vec<_>>() })
+        }
+        _ => usage(),
+    };
+    let name = std::ffi::CString::new(SERVICE_NAME).unwrap();
+    let body = std::ffi::CString::new(req.to_string()).unwrap();
+    // SAFETY: both strings are valid for the call; the reply is malloc'd by the shim.
+    let reply = unsafe {
+        let p = ftu_xpc_ctl_call(name.as_ptr(), body.as_ptr());
+        if p.is_null() {
+            eprintln!("ftu-daemon ctl: no reply from {SERVICE_NAME} (is the daemon running?)");
+            return 1;
+        }
+        let s = std::ffi::CStr::from_ptr(p).to_string_lossy().into_owned();
+        libc::free(p as *mut libc::c_void);
+        s
+    };
+    let v: serde_json::Value = serde_json::from_str(&reply).unwrap_or(serde_json::Value::String(reply));
+    if let Some(e) = v.get("error") {
+        eprintln!("ftu-daemon ctl: {}", e.as_str().unwrap_or_default());
+        return 1;
+    }
+    if req.get("get").and_then(|g| g.as_str()) == Some("meters") {
+        print_meters(&v);
+    } else if v.get("ok").is_none() {
+        println!("{}", serde_json::to_string_pretty(&v).unwrap());
+    }
+    0
+}
+
+fn print_meters(v: &serde_json::Value) {
+    let row = |key: &str| {
+        let cells: Vec<String> = v[key]
+            .as_array()
+            .map(|a| a.iter().map(|x| x.as_i64().unwrap_or(0).unsigned_abs()).collect::<Vec<_>>())
+            .unwrap_or_default()
+            .into_iter()
+            .map(|w| if w == 0 { "   -inf".into() } else { format!("{:7.1}", 20.0 * (w as f64 / 32768.0).log10()) })
+            .collect();
+        println!("{key:<6}{}", cells.join(""));
+    };
+    println!("dBFS  {}", (1..=8).map(|i| format!("{i:>7}")).collect::<String>());
+    row("in");
+    row("daw");
+    row("out");
+    println!("status {:#06x}, age {} ms", v["status"].as_u64().unwrap_or(0), v["age_ms"].as_u64().unwrap_or(0));
 }
 
 fn main() {
@@ -321,6 +392,7 @@ fn main() {
                 std::process::exit(1);
             }
         }
+        Some("ctl") => std::process::exit(run_ctl(argv.collect())),
         Some("test") => {
             if let Err(e) = run_test(parse_args(argv)) {
                 eprintln!("error: {e}");
