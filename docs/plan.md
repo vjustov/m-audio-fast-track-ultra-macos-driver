@@ -119,13 +119,16 @@ A command-line tool that talks to the device directly with libusb or the IOUSBHo
 - Phase 5 mostly done with the device on this Mac. Mixer, effects, effect return, output gain, clock, rates and meters are confirmed. Open items are listed at the end of `docs/protocol.md`.
 - Phase 6 started. `proto/ftu_stream` streams 8×8 at all rates with implicit feedback from user space.
 - Phase 7 started. `daemon/` (Rust) has the streaming core: isochronous engine, shared-memory rings, device clock. Verified through the S/PDIF loopback. See `daemon/README.md`.
-- The XPC service, the C++ HAL plugin (`plugin/`, libASPL) and the install scripts (`packaging/`) are built. Not yet installed or tested together.
+- The XPC service, the C++ HAL plugin (`plugin/`, libASPL) and the install scripts (`packaging/`) are built and installed (2026-10-24).
+  - Core Audio lists "Fast Track Ultra", 8 in / 8 out, 48 kHz. The plugin connects to the daemon over XPC.
+  - Playback through Core Audio confirmed: a -20 dBFS tone from `proto/ca_test.swift` read 3276 on the DAW 1 meter, the exact expected value.
+  - Recording through Core Audio confirmed: a phone metronome into input 1 came back as 10 clicks at 80.0 BPM, interval spread 0.48 ms, no dropouts, peak -29 dBFS. Inputs 2 to 6 stayed at their noise floors (`captures/ca-test-metronome.txt`).
 
 - Side project: firmware patching for the MIDI bugs. See `docs/firmware.md`.
 
 ## Next action
 
-Phase 7: install with `sudo packaging/install.sh`, confirm the device appears in Audio MIDI Setup, and test playback and recording through Core Audio.
+Phase 7: test in a DAW. Then sample-rate switching from Core Audio and mixer control over XPC.
 
 ---
 

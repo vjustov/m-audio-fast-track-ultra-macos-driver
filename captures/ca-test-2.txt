@@ -1,0 +1,2 @@
+playing 997 Hz at -20.0 dBFS on output 1, recording 1 inputs at 48000.0 Hz
+captured 379200 frames (47400.0 per second)
