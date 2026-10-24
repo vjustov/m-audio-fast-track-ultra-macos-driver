@@ -14,7 +14,7 @@ use crate::usb::{ClockSource, Device, UsbError, EP_CAP, EP_PLAY};
 use libusb1_sys as ffi;
 use libusb1_sys::constants::*;
 use std::os::raw::c_int;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -41,6 +41,14 @@ const LEAD_HOLD: u32 = 20;
 // that is fixed in one jump instead.
 const LEAD_BAND_PACKETS: f64 = 2.0;
 const LEAD_JUMP_PACKETS: f64 = 4.0;
+// A capture callback gap longer than this may have outlasted the playback queue's slack
+// (12 ms), skipping playback microframes and shifting the lead for real. The raw error
+// is erratic while the backlog of completions drains, then steady.
+const STALL_RESYNC_US: u64 = 10_000;
+// Playback transfers after such a stall during which the smoothed error just follows
+// the raw error, so one jump fixes the shift instead of a series chasing a lagging
+// average. More than OUT_XFERS, since the whole queue may complete in the backlog.
+const LEAD_SETTLE: u32 = 24;
 const FIFO_LEN: usize = 4096;
 const S24_SCALE: f32 = 8_388_608.0;
 // Clock loop for 1 ms updates, 0.5 Hz bandwidth: omega = 2*pi*0.5*0.001,
@@ -67,6 +75,8 @@ struct Engine {
     stopping: Arc<AtomicBool>,
     inflight: Arc<AtomicUsize>,
     failed: Arc<AtomicBool>,
+    // Test hook: milliseconds the next capture callback sleeps, to reproduce stalls.
+    stall_ms: Arc<AtomicU32>,
     rate: u32,
 
     // Frame counts of completed capture packets, consumed by playback packets.
@@ -89,6 +99,8 @@ struct Engine {
     // the next packet applies.
     since_correction: u32,
     correction: i64,
+    // Transfers left in the settle period after a stall (LEAD_SETTLE).
+    settle: u32,
     // Host time of the previous capture callback, for stall detection.
     last_cb_ticks: u64,
     ns_per_tick: f64,
@@ -125,6 +137,12 @@ impl Engine {
             return;
         }
         let err = (self.play_pos as i64 - self.cap_pos as i64 - self.target_lead) as f64;
+        if self.settle > 0 {
+            self.settle -= 1;
+            self.lead_err_avg = err;
+            self.since_correction = 0;
+            return;
+        }
         self.lead_err_avg += LEAD_ALPHA * (err - self.lead_err_avg);
         self.since_correction += 1;
         let per_packet = (self.rate / 8000) as f64;
@@ -144,6 +162,11 @@ impl Engine {
                     unsafe { std::ptr::write_bytes(p, 0, CHANNELS) };
                 }
             }
+            eprintln!(
+                "ftu-daemon: {} lead jump {jump} frames (error now {err}, smoothed {:.1})",
+                crate::wall_clock(),
+                self.lead_err_avg
+            );
             self.play_pos = (self.play_pos as i64 - jump) as u64;
             self.lead_err_avg -= jump as f64;
             self.since_correction = 0;
@@ -330,7 +353,14 @@ extern "system" fn in_cb(t: *mut ffi::libusb_transfer) {
         if gap_us > 3000 {
             e.shm().callback_stalls.fetch_add(1, Ordering::Relaxed);
         }
+        if gap_us > STALL_RESYNC_US {
+            e.settle = LEAD_SETTLE;
+        }
         e.shm().max_callback_gap_us.fetch_max(gap_us, Ordering::Relaxed);
+    }
+    let stall = e.stall_ms.swap(0, Ordering::Relaxed);
+    if stall > 0 {
+        std::thread::sleep(Duration::from_millis(stall as u64));
     }
     e.last_cb_ticks = now;
     if unsafe { (*t).status } == LIBUSB_TRANSFER_COMPLETED {
@@ -369,6 +399,7 @@ unsafe impl Send for Transfers {}
 pub struct Stream {
     stopping: Arc<AtomicBool>,
     failed: Arc<AtomicBool>,
+    stall_ms: Arc<AtomicU32>,
     thread: Option<JoinHandle<(Box<Engine>, Transfers)>>,
     shm: Arc<ShmRegion>,
     last_stats: Stats,
@@ -424,11 +455,13 @@ impl Stream {
         let stopping = Arc::new(AtomicBool::new(false));
         let failed = Arc::new(AtomicBool::new(false));
         let inflight = Arc::new(AtomicUsize::new(0));
+        let stall_ms = Arc::new(AtomicU32::new(0));
         let mut engine = Box::new(Engine {
             shm: shm.as_ptr(),
             stopping: stopping.clone(),
             inflight: inflight.clone(),
             failed: failed.clone(),
+            stall_ms: stall_ms.clone(),
             rate,
             fifo: [0; FIFO_LEN],
             fifo_head: 0,
@@ -441,6 +474,7 @@ impl Stream {
             lead_err_avg: 0.0,
             since_correction: 0,
             correction: 0,
+            settle: 0,
             last_cb_ticks: 0,
             ns_per_tick: rt::ns_per_tick(),
             clock_init: false,
@@ -519,7 +553,12 @@ impl Stream {
             })
             .expect("spawn event thread");
 
-        Ok(Self { stopping, failed, thread: Some(thread), shm, last_stats: Stats::default() })
+        Ok(Self { stopping, failed, stall_ms, thread: Some(thread), shm, last_stats: Stats::default() })
+    }
+
+    /// Test hook: makes the event thread sleep `ms` in its next capture callback.
+    pub fn inject_stall(&self, ms: u32) {
+        self.stall_ms.store(ms, Ordering::Relaxed);
     }
 
     pub fn failed(&self) -> bool {
