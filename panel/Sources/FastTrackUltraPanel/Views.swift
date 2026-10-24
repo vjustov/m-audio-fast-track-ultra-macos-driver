@@ -99,7 +99,7 @@ func rateText(_ hz: Int?) -> String {
 /// Strips that carry no signal: S/PDIF in needs the external clock (alt 2), and bus
 /// power silences analog 3 to 6 (docs/protocol.md, Hardware observations).
 func sourceActive(_ s: Int, _ status: DeviceStatus?) -> Bool {
-    if (s == 6 || s == 7) && status?.clock != "external" { return false }
+    if (s == 6 || s == 7) && status?.clock != "spdif" { return false }
     if (2...5).contains(s) && status?.power == "usb" { return false }
     return true
 }
@@ -272,25 +272,45 @@ struct SettingsView: View {
         }
     }
 
+    private var spdif: Bool { store.status?.clock == "spdif" }
+
+    /// S/PDIF in (sources 7 and 8) audible on bus 4, which feeds S/PDIF out.
+    private var spdifLoop: Bool {
+        state.buses[3][6...7].contains { $0.level != nil && !$0.mute }
+    }
+
     var body: some View {
         Form {
             Section {
+                Picker("Clock source", selection: Binding(
+                    get: { store.status?.clock ?? "internal" },
+                    set: { store.setClock($0) }
+                )) {
+                    Text("Internal").tag("internal")
+                    Text("External (S/PDIF)").tag("spdif")
+                }
+                .disabled(store.status?.port == "USB 1.1")
                 Picker("Sample rate", selection: Binding(
                     get: { store.status?.sample_rate ?? 0 },
                     set: { r in rateError = CoreAudioRate.set(Double(r)) }
                 )) {
                     ForEach([44100, 48000, 88200, 96000], id: \.self) { Text(rateText($0)).tag($0) }
                 }
+                .disabled(spdif)
                 if let e = rateError { Text(e).foregroundStyle(.red) }
-                Picker("Clock source", selection: .constant("internal")) {
-                    Text("Internal").tag("internal")
-                    Text("External (S/PDIF)").tag("external")
+                if spdif, store.status?.clock_locked == false {
+                    Text("No S/PDIF signal. Connect a source to S/PDIF in.").foregroundStyle(.red)
                 }
-                .disabled(true)
+                if spdif, spdifLoop {
+                    Text("S/PDIF in is routed to outputs 7/8 (S/PDIF out). On S/PDIF clock this can feed back.")
+                        .foregroundStyle(.orange)
+                }
             } header: {
                 Text("Audio")
             } footer: {
-                Text("The sample rate follows Core Audio. External clock is not supported yet, so S/PDIF input is ignored.")
+                Text(spdif
+                     ? "The S/PDIF source sets the sample rate."
+                     : "The sample rate follows Core Audio. S/PDIF input needs the S/PDIF clock.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Effect") {

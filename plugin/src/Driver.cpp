@@ -393,10 +393,11 @@ public:
     {
         link_->EnsureConnected();
         // The daemon may be at another rate (its default, or a previous session's).
-        // Core Audio's nominal rate wins.
+        // Core Audio's nominal rate wins, except on S/PDIF clock, where the source
+        // sets the rate and the daemon ignores requests.
         const ftu_shm_t* s = link_->Shm();
         const UInt32 want = rate_->rate.load();
-        if (s && s->sample_rate.load() != want) {
+        if (s && s->clock_source.load() == 0 && s->sample_rate.load() != want) {
             link_->RequestRate(want);
         }
         return kAudioHardwareNoError;
