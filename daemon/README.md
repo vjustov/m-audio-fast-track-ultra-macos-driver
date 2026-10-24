@@ -56,7 +56,7 @@ D="/Library/Application Support/FastTrackUltra/ftu-daemon"
 | `link.out<1-8>` | Links an output pair's faders in clients. No effect on the device |
 | `out<1-8>.level`, `out<1-8>.mute` | Output gain after the mixer (unit 9) |
 
-Sources are `in1` to `in8` (7 and 8 are S/PDIF) and `daw1` to `daw8`. Several pairs in one `set` apply together or not at all. Clients can also replace the whole state with `{"put": state}` (used for settings files). `get meters` returns the peak since the previous read.
+Sources are `in1` to `in8` (7 and 8 are S/PDIF) and `daw1` to `daw8`. Several pairs in one `set` apply together or not at all. Clients can also replace the whole state with `{"put": state}` (used for settings files). `get meters` returns the peak of the last 60 ms (three 20 ms polls), so several clients can read without interfering.
 
 ## Design notes
 

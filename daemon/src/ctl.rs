@@ -21,13 +21,27 @@ use std::time::{Duration, Instant};
 // Each GET_MEM returns the snapshot taken at the previous one, so the poll period is
 // also the meters' age.
 const METER_PERIOD: Duration = Duration::from_millis(20);
+/// Polls kept for the peak window: 3 × 20 ms covers a client reading every 33 ms
+/// (the panel's 30 Hz) without losing short peaks, and no reader resets it for another.
+const PEAK_POLLS: usize = 3;
 
 struct Meters {
     words: [i16; 27],
-    /// Largest magnitude per meter since the last `get meters`, so short peaks between
-    /// client reads are not lost.
-    peak: [u16; 26],
+    /// Magnitudes from the last `PEAK_POLLS` polls, newest last.
+    recent: Vec<[u16; 26]>,
     at: Instant,
+}
+
+impl Meters {
+    fn peak(&self) -> [u16; 26] {
+        let mut p = [0u16; 26];
+        for r in &self.recent {
+            for (a, b) in p.iter_mut().zip(r) {
+                *a = (*a).max(*b);
+            }
+        }
+        p
+    }
 }
 
 #[derive(Default)]
@@ -183,9 +197,9 @@ impl Control {
     }
 
     fn meters_json(&self) -> Value {
-        match &mut *self.meters.lock().unwrap() {
+        match &*self.meters.lock().unwrap() {
             Some(mt) => {
-                let w = std::mem::take(&mut mt.peak);
+                let w = mt.peak();
                 json!({
                     "in": &w[0..8],
                     "daw": &w[8..16],
@@ -207,11 +221,16 @@ impl Control {
         if poll_due {
             if let Ok(words) = dev.read_meters_raw() {
                 let mut meters = self.meters.lock().unwrap();
-                let mut peak = meters.as_ref().map_or([0; 26], |m| m.peak);
-                for (p, w) in peak.iter_mut().zip(&words) {
-                    *p = (*p).max(w.unsigned_abs());
+                let mut recent = meters.as_ref().map_or_else(Vec::new, |m| m.recent.clone());
+                let mut mag = [0u16; 26];
+                for (m, w) in mag.iter_mut().zip(&words) {
+                    *m = w.unsigned_abs();
                 }
-                let prev = meters.replace(Meters { words, peak, at: Instant::now() });
+                recent.push(mag);
+                if recent.len() > PEAK_POLLS {
+                    recent.remove(0);
+                }
+                let prev = meters.replace(Meters { words, recent, at: Instant::now() });
                 drop(meters);
                 // Power mode change (status bits 0 and 1): the DSP restarts, so resend everything.
                 if prev.is_some_and(|p| (p.words[26] ^ words[26]) & 0x3 != 0) {

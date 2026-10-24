@@ -11,12 +11,25 @@ struct PanelApp: App {
     }
 
     var body: some Scene {
-        WindowGroup("Fast Track Ultra Control Panel") {
+        // One window: the panel controls a single device, so a second copy (⌘N) would
+        // only duplicate it.
+        Window("Fast Track Ultra Control Panel", id: "main") {
             ContentView().environmentObject(store).environmentObject(store.meterStore)
         }
         .windowResizability(.contentSize)
         .commands {
             CommandGroup(replacing: .appInfo) { AboutCommand() }
+            CommandGroup(replacing: .newItem) {
+                Button("Open Preset…") { store.openPreset() }.keyboardShortcut("o")
+                Button("Save Preset As…") { store.savePresetAs() }.keyboardShortcut("s", modifiers: [.command, .shift])
+            }
+            CommandGroup(before: .toolbar) {
+                ForEach(tabNames.indices, id: \.self) { i in
+                    Button(tabNames[i]) { store.tab = i }
+                        .keyboardShortcut(KeyEquivalent(Character(String(i + 1))))
+                }
+                Divider()
+            }
         }
 
         Window("About Fast Track Ultra", id: "about") {
@@ -46,6 +59,15 @@ enum Snapshot {
                 view.cacheDisplay(in: view.bounds, to: rep)
                 try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
             }
+            // Menu bar listing next to the image, to check commands and shortcuts.
+            let menus = (NSApp.mainMenu?.items ?? []).map { top in
+                ([top.title] + (top.submenu?.items ?? []).filter { !$0.isSeparatorItem }.map { item in
+                    let mods = item.keyEquivalentModifierMask
+                    let key = item.keyEquivalent.isEmpty ? "" : " " + (mods.contains(.shift) ? "⇧" : "") + (mods.contains(.command) ? "⌘" : "") + item.keyEquivalent.uppercased()
+                    return "  " + item.title + key
+                }).joined(separator: "\n")
+            }
+            try? menus.joined(separator: "\n").write(toFile: path + ".menus.txt", atomically: true, encoding: .utf8)
             NSApp.terminate(nil)
         }
     }

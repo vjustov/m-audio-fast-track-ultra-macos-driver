@@ -126,7 +126,7 @@ A command-line tool that talks to the device directly with libusb or the IOUSBHo
   - DAW test passed (user, 2026-10-24): Ableton Live Lite recorded input 1 and played it back to both sides of the headphones.
   - Sample-rate switching from Core Audio works at 44.1, 48, 88.2 and 96 kHz. The plugin asks the daemon over XPC; the switch takes 0.1 to 0.25 s. Metronome recordings at each rate: click interval spread at most 0.03 ms, no dropouts (`captures/ca-rates.txt`).
   - Latency reduced from 64 ms to 24 ms output safety offset: capture transfers complete every 1 ms, 16 ms playback queue, a control loop holds the playback lead constant. An 8 ms queue failed with `kIOReturnIsoTooOld` (libusb schedules every submit at least 4 ms ahead).
-  - 3-minute soak at 48 kHz on the 24 ms build: 240 clicks, interval spread 0.08 ms, no dropouts, no USB errors, late writes or short reads. The daemon log showed 2,731 playback underruns on that build. The counter did not move afterwards, so they most likely came from stream start, before the soak. Not yet explained.
+  - 3-minute soak at 48 kHz on the 24 ms build: 240 clicks, interval spread 0.08 ms, no dropouts, no USB errors, late writes or short reads. The daemon log showed 2,731 playback underruns on that build. Explained (2026-10-24): 2,731 packets × 6 frames is one 16,384-frame ring. When the writer stops (here, `install.sh` restarting coreaudiod), the old counter counted every packet of the next ring's worth of intended silence. The counter now counts each dry stretch once. No audible glitch was involved.
   - Control panel (`panel/`, SwiftUI, 2026-10-24): layout after the vendor panel, native macOS controls. Tested by the user on the device.
   - Mixer control over XPC (2026-10-24): the daemon keeps the mixer, effect and output state, saves it, and restores it after a power cycle. `ftu-daemon ctl` drives it. Verified with a metronome on input 1: level, pan law, link, mute, solo, buses 2 and 4 and effect send on the meters; output gain, output mute and effect returns by ear; restore after a full power cycle on the meters. See `daemon/README.md`.
 
@@ -134,7 +134,7 @@ A command-line tool that talks to the device directly with libusb or the IOUSBHo
 
 ## Next action
 
-Phase 7: finish the control panel (menu bar commands, a single main window, external clock). Phase 8: the startup underruns, longer soaks and lower latency.
+Phase 7: finish the control panel (menu bar commands, a single main window, external clock). Phase 8: longer soaks with the new underrun counter, sleep and hot-plug, and lower latency.
 
 ---
 

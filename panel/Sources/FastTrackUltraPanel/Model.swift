@@ -1,6 +1,7 @@
 // Mirrors the daemon's JSON (daemon/src/mixer.rs and ctl.rs) and keeps the panel in
 // sync with it. Edits update the local copy at once and reach the daemon in batches.
 
+import AppKit
 import Foundation
 import SwiftUI
 
@@ -69,6 +70,8 @@ final class MeterStore: ObservableObject {
 @MainActor
 final class Store: ObservableObject {
     @Published var state: MixerState?
+    /// Selected tab: 0 to 3 monitor pairs, 4 Device, 5 Meters. Shared with the View menu.
+    @Published var tab = Int(ProcessInfo.processInfo.environment["FTU_TAB"] ?? "") ?? 0
     let meterStore = MeterStore()
     @Published var status: DeviceStatus?
     @Published var reachable = true
@@ -268,6 +271,19 @@ final class Store: ObservableObject {
     }
 
     // MARK: Settings files
+
+    func openPreset() {
+        let p = NSOpenPanel()
+        p.allowedContentTypes = [.json]
+        if p.runModal() == .OK, let url = p.url { load(from: url) }
+    }
+
+    func savePresetAs() {
+        let p = NSSavePanel()
+        p.allowedContentTypes = [.json]
+        p.nameFieldStringValue = "Fast Track Ultra.json"
+        if p.runModal() == .OK, let url = p.url { save(to: url) }
+    }
 
     func save(to url: URL) {
         guard let st = state else { return }

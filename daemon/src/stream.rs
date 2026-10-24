@@ -73,6 +73,9 @@ struct Engine {
     // prefilled playback queue. Drift away from it means the device consumes at a
     // different rate than we send, or that fallback packets were used.
     target_lead: i64,
+    // True while the writer is behind the read position, so a stretch of missing
+    // packets counts as one underrun.
+    starved: bool,
 
     // Clock smoothing (sample time -> host ticks).
     clock_init: bool,
@@ -131,12 +134,16 @@ impl Engine {
             let mut offset = 0usize;
             for i in 0..(*t).num_iso_packets as usize {
                 let frames = self.next_frame_count().min(MAX_FRAMES_PER_PACKET);
-                // Count only while a writer is active: write_pos within one ring of the
-                // read position. An idle or absent writer is silence, not an underrun.
+                // Count each time playback runs dry once, not once per packet. A writer
+                // that stops (an app ends playback, coreaudiod restarts) leaves write_pos
+                // behind, and per-packet counting turned the following ring's worth of
+                // intended silence into 2,731 "underruns" at 48 kHz.
                 let active = write_pos != 0 && write_pos + RING_FRAMES as u64 > self.play_pos;
-                if active && write_pos < self.play_pos + frames as u64 {
+                let short = active && write_pos < self.play_pos + frames as u64;
+                if short && !self.starved {
                     shm.play_underruns.fetch_add(1, Ordering::Relaxed);
                 }
+                self.starved = short;
                 let out = (*t).buffer.add(offset);
                 for f in 0..frames {
                     let src = shm.playback_frame(self.play_pos + f as u64);
@@ -324,6 +331,7 @@ impl Stream {
             cap_pos: 0,
             play_pos: 0,
             target_lead: (OUT_XFERS * OUT_PACKETS) as i64 * rate as i64 / 8000,
+            starved: false,
             clock_init: false,
             anchor_sample: 0,
             anchor_host: 0.0,

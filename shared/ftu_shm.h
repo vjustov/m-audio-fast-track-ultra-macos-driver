@@ -52,7 +52,7 @@ typedef struct {
     FTU_ATOMIC(uint64_t) play_write_pos;  // written by the playback writer: frames filled up to here
 
     // Counters for diagnostics.
-    FTU_ATOMIC(uint64_t) play_underruns;  // packets where the writer had not reached play_read_pos
+    FTU_ATOMIC(uint64_t) play_underruns;  // times an active writer fell behind play_read_pos
     FTU_ATOMIC(uint64_t) usb_errors;
 
     // Written by the plugin.

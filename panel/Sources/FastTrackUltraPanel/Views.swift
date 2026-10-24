@@ -16,13 +16,12 @@ func panText(_ p: Double) -> String {
 
 struct ContentView: View {
     @EnvironmentObject var store: Store
-    @State private var tab = Int(ProcessInfo.processInfo.environment["FTU_TAB"] ?? "") ?? 0
 
     var body: some View {
         VStack(spacing: 0) {
             PresetsBar().padding(.horizontal, 10).padding(.vertical, 6)
             if let st = store.state {
-                Picker("Section", selection: $tab) {
+                Picker("Section", selection: $store.tab) {
                     ForEach(tabNames.indices, id: \.self) { Text(tabNames[$0]).tag($0) }
                 }
                 .pickerStyle(.segmented)
@@ -31,8 +30,8 @@ struct ContentView: View {
                 .padding(.bottom, 8)
                 Divider()
                 Group {
-                    switch tab {
-                    case 0..<4: MonitorView(bus: tab, state: st)
+                    switch store.tab {
+                    case 0..<4: MonitorView(bus: store.tab, state: st)
                     case 4: SettingsView(state: st)
                     default: MetersView()
                     }
@@ -56,17 +55,8 @@ struct PresetsBar: View {
     var body: some View {
         HStack {
             Text("PRESETS").font(.caption).foregroundStyle(.secondary)
-            Button("Load…") {
-                let p = NSOpenPanel()
-                p.allowedContentTypes = [.json]
-                if p.runModal() == .OK, let url = p.url { store.load(from: url) }
-            }
-            Button("Save as…") {
-                let p = NSSavePanel()
-                p.allowedContentTypes = [.json]
-                p.nameFieldStringValue = "Fast Track Ultra.json"
-                if p.runModal() == .OK, let url = p.url { store.save(to: url) }
-            }
+            Button("Load…") { store.openPreset() }
+            Button("Save as…") { store.savePresetAs() }
             Spacer()
             if let m = store.message {
                 Text(m).font(.caption).foregroundStyle(.secondary)
