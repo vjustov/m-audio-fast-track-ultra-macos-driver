@@ -132,6 +132,20 @@ A command-line tool that talks to the device directly with libusb or the IOUSBHo
 
 - Side project: firmware patching for the MIDI bugs. See `docs/firmware.md`.
 
+## Possible improvements
+
+### Keyboard volume keys
+
+The vendor driver did not support them. Its kext imports no `IOAudioLevelControl`. It builds only a clock selector and one `IOAudioToggleControl`, and no `'mute'` code appears in the binary. macOS needs a level control on the output device for the volume keys to work.
+
+Our HAL plugin could publish a volume and mute control that the daemon applies on the device. Cost is one XPC message and one control transfer per key press, outside the audio path. Open questions:
+
+- **Which stage.** Unit 9 sits after the mixer's output faders. Driving it from the keys makes two volume stages that multiply, so the panel can read 0 dB while the output is silent. Options: drive the panel's out 1/2 fader (one source of truth), expose unit 9 as a separate master shown in the panel, or leave it off by default behind a setting.
+- **Calibrated monitors.** A stray key press changes speaker level. This may be why the vendor left it out. An opt-in setting avoids surprises.
+- **Clicks.** Unknown whether the hardware ramps gain changes. Test steps on unit 9 by ear first.
+- **Restore.** macOS restores a per-device volume on reconnect, and the daemon restores its own state. One of them must own the value.
+- **Range.** The device mutes anything above about +1 dB. Cap the control at 0 dB. Unit 9 is confirmed on channel 3 only.
+
 ## Next action
 
 Phase 7: finish the control panel (menu bar commands, a single main window, external clock). Phase 8: longer soaks with the new underrun counter, sleep and hot-plug, and lower latency.
