@@ -31,6 +31,9 @@ struct Args {
     freq: f64,
     dbfs: f64,
     record: Option<String>,
+    /// Stream on internal clock for 5 s first, stop, then start on `clock` on the same
+    /// handle, as the service does on a clock change.
+    switch: bool,
 }
 
 fn parse_args(mut it: impl Iterator<Item = String>) -> Args {
@@ -42,6 +45,7 @@ fn parse_args(mut it: impl Iterator<Item = String>) -> Args {
         freq: 997.0,
         dbfs: -20.0,
         record: None,
+        switch: false,
     };
     while let Some(k) = it.next() {
         let mut val = || it.next().unwrap_or_else(|| usage());
@@ -53,6 +57,7 @@ fn parse_args(mut it: impl Iterator<Item = String>) -> Args {
             "--freq" => a.freq = val().parse().unwrap_or_else(|_| usage()),
             "--dbfs" => a.dbfs = val().parse().unwrap_or_else(|_| usage()),
             "--record" => a.record = Some(val()),
+            "--switch" => a.switch = true,
             _ => usage(),
         }
     }
@@ -64,8 +69,9 @@ fn parse_args(mut it: impl Iterator<Item = String>) -> Args {
 
 fn usage() -> ! {
     eprintln!(
-        "usage: ftu-daemon run\n       ftu-daemon ctl get [state|meters|status] | set PATH VALUE [PATH VALUE ...] | reset\n       ftu-daemon test [--rate HZ] [--seconds S] [--spdif] [--tone-channel 0-8] [--freq HZ] [--dbfs DB] [--record out.wav]\n\
-         Tone channel 0 disables the tone."
+        "usage: ftu-daemon run\n       ftu-daemon ctl get [state|meters|status] | set PATH VALUE [PATH VALUE ...] | clock internal|spdif | reset\n       ftu-daemon test [--rate HZ] [--seconds S] [--spdif] [--tone-channel 0-8] [--freq HZ] [--dbfs DB] [--record out.wav] [--switch]\n\
+         Tone channel 0 disables the tone. --switch streams 5 s on internal clock first, then\n\
+         switches on the same handle, as the service does."
     );
     std::process::exit(2)
 }
@@ -124,8 +130,13 @@ fn run_test(a: Args) -> Result<(), Box<dyn std::error::Error>> {
         let _ = ctrlc_like(move || stop.store(true, Ordering::Release));
     }
 
-    let mut dev = Device::open()?;
     let shm = Arc::new(ShmRegion::new()?);
+    let mut dev = Device::open()?;
+    if a.switch {
+        let first = Stream::start(&mut dev, shm.clone(), StreamConfig { sample_rate: a.rate, clock: ClockSource::Internal })?;
+        std::thread::sleep(Duration::from_secs(5));
+        println!("switch: internal stream stopped ({:?})", first.stop(&mut dev));
+    }
     let stream = Stream::start(&mut dev, shm.clone(), StreamConfig { sample_rate: a.rate, clock: a.clock })?;
     let s = stream.shm();
     let rate = s.sample_rate.load(Ordering::Acquire);
@@ -271,13 +282,26 @@ fn run_service() -> Result<(), Box<dyn std::error::Error>> {
         control.device_opened(&dev);
         // Restore the mixer before audio starts.
         control.service(&dev, &mut sent, Duration::ZERO);
-        let cfg = StreamConfig { sample_rate: rate, clock: ClockSource::Internal };
+        control.take_clock_change();
+        let clock = if dev.link_speed() == "USB 2.0" { control.clock() } else { ClockSource::Internal };
+        let mut cfg = StreamConfig { sample_rate: rate, clock };
+        if clock == ClockSource::Spdif {
+            // Select alternate setting 2 first, so the status word reports the S/PDIF rate.
+            if let Err(e) = dev.claim_streaming(clock) {
+                eprintln!("ftu-daemon: selecting S/PDIF clock failed: {e}");
+            }
+            std::thread::sleep(Duration::from_millis(100));
+            cfg.sample_rate = device_rate(&dev).unwrap_or(rate);
+        }
         match Stream::start(&mut dev, shm.clone(), cfg) {
             Ok(stream) => {
                 let streaming_rate = stream.shm().sample_rate.load(Ordering::Acquire);
-                eprintln!("ftu-daemon: streaming at {streaming_rate} Hz");
-                control.set_streaming(Some(streaming_rate));
+                eprintln!("ftu-daemon: streaming at {streaming_rate} Hz, clock {}", clock.name());
+                control.set_streaming(Some(streaming_rate), Some(clock));
                 let mut new_rate = None;
+                let mut clock_change = false;
+                // On S/PDIF clock: when the device started reporting another rate.
+                let mut rate_mismatch_since: Option<Instant> = None;
                 let mut last_report = Instant::now();
                 let mut reported = (0u64, 0u64);
                 while !stream.failed() {
@@ -301,14 +325,39 @@ fn run_service() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     // SAFETY: as above.
                     let r = unsafe { ftu_xpc_take_requested_rate() };
-                    if r != 0 && r != rate {
+                    // On S/PDIF clock the source sets the rate, so requests are dropped.
+                    if r != 0 && r != rate && clock == ClockSource::Internal {
                         new_rate = Some(r);
                         break;
                     }
+                    if control.take_clock_change() {
+                        clock_change = true;
+                        break;
+                    }
+                    // Follow the source's rate. The status word can lag a restart, so a
+                    // mismatch must last 500 ms.
+                    if clock == ClockSource::Spdif {
+                        let reported = control.status_word().map(ctl::status_rate);
+                        if reported.is_some_and(|r| r != streaming_rate) {
+                            let since = *rate_mismatch_since.get_or_insert_with(Instant::now);
+                            if since.elapsed() >= Duration::from_millis(500) {
+                                new_rate = reported;
+                                break;
+                            }
+                        } else {
+                            rate_mismatch_since = None;
+                        }
+                    }
                     control.service(&dev, &mut sent, Duration::from_millis(50));
                 }
-                control.set_streaming(None);
+                control.set_streaming(None, None);
                 let stats = stream.stop(&mut dev);
+                if clock_change {
+                    eprintln!("ftu-daemon: switching to {} clock", control.clock().name());
+                    // Keep the current rate, so leaving S/PDIF does not jump.
+                    rate = streaming_rate;
+                    continue;
+                }
                 match new_rate {
                     Some(r) => {
                         eprintln!("ftu-daemon: switching to {r} Hz");
@@ -332,6 +381,13 @@ fn run_service() -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
+/// Rate from the device status word. The meter read returns the previous snapshot, so
+/// read twice.
+fn device_rate(dev: &Device) -> Option<u32> {
+    dev.read_meters_raw().ok()?;
+    dev.read_meters_raw().ok().map(|w| ctl::status_rate(w[26] as u16))
+}
+
 /// `ftu-daemon ctl ...`: builds one request, prints the reply. Returns the exit code.
 fn run_ctl(args: Vec<String>) -> i32 {
     let req = match args.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
@@ -339,6 +395,7 @@ fn run_ctl(args: Vec<String>) -> i32 {
         ["get", "meters"] | ["meters"] => serde_json::json!({ "get": "meters" }),
         ["get", "status"] | ["status"] => serde_json::json!({ "get": "status" }),
         ["reset"] => serde_json::json!({ "reset": true }),
+        ["clock", c] => serde_json::json!({ "clock": c }),
         ["set", rest @ ..] if !rest.is_empty() && rest.len() % 2 == 0 => {
             serde_json::json!({ "set": rest.chunks(2).map(|p| [p[0], p[1]]).collect::<Vec<_>>() })
         }

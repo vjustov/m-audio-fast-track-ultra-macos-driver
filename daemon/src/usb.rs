@@ -43,6 +43,21 @@ pub enum ClockSource {
 }
 
 impl ClockSource {
+    pub fn name(self) -> &'static str {
+        match self {
+            ClockSource::Internal => "internal",
+            ClockSource::Spdif => "spdif",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "internal" => Some(ClockSource::Internal),
+            "spdif" => Some(ClockSource::Spdif),
+            _ => None,
+        }
+    }
+
     /// Capture interface alternate setting that selects this clock (protocol.md, clock tests).
     fn capture_alt(self) -> c_int {
         match self {

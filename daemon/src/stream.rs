@@ -326,15 +326,21 @@ impl Stream {
     /// Claims the streaming interfaces, sets the rate and starts both directions.
     pub fn start(dev: &mut Device, shm: Arc<ShmRegion>, cfg: StreamConfig) -> Result<Self, UsbError> {
         dev.claim_streaming(cfg.clock)?;
-        if cfg.clock == ClockSource::Internal {
-            dev.set_sample_rate(cfg.sample_rate)?;
-        }
-        let rate = dev.sample_rate()?;
+        // On S/PDIF clock the device ignores rate requests. The caller passes the rate
+        // the device reports in its status word, as the vendor kext does.
+        let rate = match cfg.clock {
+            ClockSource::Internal => {
+                dev.set_sample_rate(cfg.sample_rate)?;
+                dev.sample_rate()?
+            }
+            ClockSource::Spdif => cfg.sample_rate,
+        };
 
         let s = shm.get();
         s.running.store(0, Ordering::Release);
         s.generation.fetch_add(1, Ordering::AcqRel);
         s.sample_rate.store(rate, Ordering::Release);
+        s.clock_source.store(cfg.clock as u32, Ordering::Release);
         s.cap_write_pos.store(0, Ordering::Release);
         s.play_read_pos.store(0, Ordering::Release);
         s.play_write_pos.store(0, Ordering::Release);

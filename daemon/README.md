@@ -37,7 +37,8 @@ The firmware cannot report its own state (GET returns canned values), so the dae
 D="/Library/Application Support/FastTrackUltra/ftu-daemon"
 "$D" ctl get                       # full state as JSON
 "$D" ctl meters                    # peak meters in dBFS, polled every 20 ms
-"$D" ctl status                    # connected, streaming, rate, power, firmware
+"$D" ctl status                    # connected, port, streaming, rate, clock, power, firmware
+"$D" ctl clock spdif               # or internal; saved in device.json, restarts the stream
 "$D" ctl set bus1.in1.level -6 bus1.in1.pan 0.5
 "$D" ctl reset                     # defaults: DAW 1-8 to outputs 1-8, inputs off
 ```
@@ -55,6 +56,8 @@ D="/Library/Application Support/FastTrackUltra/ftu-daemon"
 | `fx.bypass.<1-2>` | `on` silences the effect return on bus 1 or 2. No firmware bypass request is known |
 | `link.out<1-8>` | Links an output pair's faders in clients. No effect on the device |
 | `out<1-8>.level`, `out<1-8>.mute` | Output gain after the mixer (unit 9) |
+
+On S/PDIF clock the stream runs on capture alternate setting 2 at the rate the device reports in status bits 8 to 9. Rate requests from Core Audio are ignored, and the stream restarts when the reported rate changes for 500 ms. Core Audio does not follow the source's rate yet. `status` reports `clock_locked` from bit 12 while on S/PDIF clock. That path is untested: this unit's receiver locks to its own S/PDIF output.
 
 Sources are `in1` to `in8` (7 and 8 are S/PDIF) and `daw1` to `daw8`. Several pairs in one `set` apply together or not at all. Clients can also replace the whole state with `{"put": state}` (used for settings files). `get meters` returns the peak of the last 60 ms (three 20 ms polls), so several clients can read without interfering.
 

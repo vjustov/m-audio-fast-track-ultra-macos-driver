@@ -46,7 +46,10 @@ struct DeviceStatus: Decodable, Equatable {
     var connected: Bool
     var streaming: Bool
     var sample_rate: Int?
+    /// Clock setting: "internal" or "spdif".
     var clock: String
+    /// On S/PDIF clock while streaming: whether the device reports a valid signal.
+    var clock_locked: Bool?
     var port: String?
     var power: String?
     var startup_power: String?
@@ -256,6 +259,14 @@ final class Store: ObservableObject {
         state?.out_link[p] = on
         send("link.out\(2 * p + 1)", onOff(on))
         if on, let l = state?.outputs[2 * p].level { setOutLevel(output: 2 * p, l) }
+    }
+
+    func setClock(_ c: String) {
+        client.request(["clock": c]) { [weak self] r in
+            guard let self else { return }
+            if let err = (r as? [String: Any])?["error"] as? String { self.message = err }
+            self.refreshStatus()
+        }
     }
 
     func setProgram(_ i: Int) {

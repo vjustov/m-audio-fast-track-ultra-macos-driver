@@ -222,6 +222,8 @@ Alternate setting table for high speed, `kHighSpeedAltInfo` K:`0x10820` (observe
 
 Linux only ever selects alternate setting 1. It probably cannot sync to S/PDIF.
 
+Our driver follows the kext: S/PDIF clock selects alternate setting 2, takes the rate from status bits 8 to 9, and reports lock from bit 12. Rate following and the lock report are untested without an external source (see Clock and sample rate tests).
+
 ### USB 1.1 mode
 
 When the link is not high speed, the kext switches to `kFullSpeedAltInfo` K:`0x108e0` (observed). The high-speed flag is set in `CreateAudioInterfaceServices` K:`0x1d8c`.

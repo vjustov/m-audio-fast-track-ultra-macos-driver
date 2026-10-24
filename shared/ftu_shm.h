@@ -24,7 +24,7 @@
 #endif
 
 #define FTU_SHM_MAGIC 0x31555446u  // "FTU1"
-#define FTU_SHM_VERSION 2u
+#define FTU_SHM_VERSION 3u
 #define FTU_CHANNELS 8u
 #define FTU_RING_FRAMES 16384u  // power of two; 341 ms at 48 kHz, 170 ms at 96 kHz
 
@@ -59,7 +59,10 @@ typedef struct {
     FTU_ATOMIC(uint64_t) plugin_late_writes;  // output cycles that arrived after play_read_pos
     FTU_ATOMIC(uint64_t) plugin_short_reads;  // input cycles not yet captured (zero-filled)
 
-    uint8_t reserved[48];
+    // Clock the running stream uses: 0 internal, 1 S/PDIF. Written by the daemon at stream start.
+    FTU_ATOMIC(uint32_t) clock_source;
+
+    uint8_t reserved[44];
 
     float capture[FTU_RING_FRAMES * FTU_CHANNELS];
     float playback[FTU_RING_FRAMES * FTU_CHANNELS];

@@ -129,6 +129,7 @@ A command-line tool that talks to the device directly with libusb or the IOUSBHo
   - 3-minute soak at 48 kHz on the 24 ms build: 240 clicks, interval spread 0.08 ms, no dropouts, no USB errors, late writes or short reads. The daemon log showed 2,731 playback underruns on that build. Explained (2026-10-24): 2,731 packets × 6 frames is one 16,384-frame ring. When the writer stops (here, `install.sh` restarting coreaudiod), the old counter counted every packet of the next ring's worth of intended silence. The counter now counts each dry stretch once. No audible glitch was involved.
   - Control panel (`panel/`, SwiftUI, 2026-10-24): layout after the vendor panel, native macOS controls. Tested by the user on the device.
   - Mixer control over XPC (2026-10-24): the daemon keeps the mixer, effect and output state, saves it, and restores it after a power cycle. `ftu-daemon ctl` drives it. Verified with a metronome on input 1: level, pan law, link, mute, solo, buses 2 and 4 and effect send on the meters; output gain, output mute and effect returns by ear; restore after a full power cycle on the meters. See `daemon/README.md`.
+  - External clock (2026-10-24): `ftu-daemon ctl clock spdif|internal` and the panel's clock picker. The daemon streams on capture alternate setting 2 at the rate from status bits 8 to 9, and reports lock from bit 12. Through the internal S/PDIF loopback with audio playing: 120 s on S/PDIF clock, status `0x2100` (S/PDIF, 48 kHz, locked), no USB errors, coreaudiod at most 3% CPU. The test harness (`ftu-daemon test --spdif [--switch]`) streamed 20 s runs with a steady lead and no packet errors. Untested without an external source: lock loss and following a source's rate change. Core Audio does not follow a source's rate yet. A Core Audio clock selector was tried and removed (see Possible improvements).
 
 - Side project: firmware patching for the MIDI bugs. See `docs/firmware.md`.
 
@@ -146,9 +147,17 @@ Our HAL plugin could publish a volume and mute control that the daemon applies o
 - **Restore.** macOS restores a per-device volume on reconnect, and the daemon restores its own state. One of them must own the value.
 - **Range.** The device mutes anything above about +1 dB. Cap the control at 0 dB. Unit 9 is confirmed on channel 3 only.
 
+### Core Audio clock source selector
+
+Tried on 2026-10-24 and removed, together with a plugin watcher thread that polled the daemon every 250 ms and moved Core Audio's nominal rate through configuration changes. That build deadlocked coreaudiod at load, even on internal clock with no clock change. Every new Core Audio client then hung until `sudo killall coreaudiod`. Both pieces were new in that build, so which one caused it is open.
+
+The selector was an `AudioClockSourceControl` (class `'clck'`, items `'int '` and `'spdf'`), dispatched by hand because libASPL has no selector controls. A `sample` of coreaudiod showed one thread in `HALC_ShellPlugIn::ProxyObject_PropertiesChanged` → `HALC_ShellSimpleProxyList::Reconcile`, holding the plug-in command gate while it waited on a synchronous property call. A second thread spun in `HALS_System::GetNumberPlugIns` → `_CopyDeviceManagerList` on the same lock. While coreaudiod spun, the daemon's USB thread was starved: the playback lead drifted to -200,000 frames and isochronous submits failed, on either clock.
+
+Before retrying: add the selector alone, without a watcher, and test it with a coreaudiod sample ready. Compare with a shipping AudioServerPlugIn that has a clock selector. Core Audio following a S/PDIF source's rate also needs a different mechanism than the watcher.
+
 ## Next action
 
-Phase 7: finish the control panel (menu bar commands, a single main window, external clock). Phase 8: longer soaks with the new underrun counter, sleep and hot-plug, and lower latency.
+Phase 7: Core Audio following an external source's rate, tested with a real S/PDIF source. Phase 8: longer soaks with the new underrun counter, sleep and hot-plug, and lower latency.
 
 ---
 

@@ -4,17 +4,19 @@
 //! Requests and replies are JSON strings carried in the XPC "ctl" op (xpc_shim.c):
 //!   {"get": "state"}                       -> the mixer state (mixer.rs)
 //!   {"get": "meters"}                      -> latest meter snapshot
-//!   {"get": "status"}                      -> connection, port, streaming, rate, power, firmware
+//!   {"get": "status"}                      -> connection, port, streaming, rate, clock, power, firmware
+//!   {"clock": "internal" | "spdif"}        -> {"ok": true}; the stream restarts on the new clock
 //!   {"put": {state}}                       -> replaces the whole state (settings file restore)
 //!   {"set": [["bus1.in1.level", "-6"], ..]} -> {"ok": true} or {"error": ".."}; all or nothing
 //!   {"reset": true}                        -> defaults
 
 use crate::mixer::{Ctl, Mixer};
-use crate::usb::Device;
+use crate::usb::{ClockSource, Device};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::ffi::{c_char, CStr, CString};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Condvar, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -50,6 +52,7 @@ struct Status {
     sample_rate: Option<u32>, // Some while streaming
     firmware: Option<String>,
     port: Option<&'static str>,
+    clock: Option<ClockSource>, // Some while streaming
 }
 
 pub struct Control {
@@ -59,6 +62,14 @@ pub struct Control {
     wake: Condvar,
     meters: Mutex<Option<Meters>>,
     status: Mutex<Status>,
+    /// Clock source setting, saved in device.json. The service loop picks up changes.
+    clock: Mutex<ClockSource>,
+    clock_changed: AtomicBool,
+}
+
+/// Device sample rate from status word bits 8 to 9 (docs/protocol.md).
+pub fn status_rate(word: u16) -> u32 {
+    [44100, 48000, 88200, 96000][(word >> 8 & 3) as usize]
 }
 
 static CONTROL: OnceLock<Control> = OnceLock::new();
@@ -74,6 +85,14 @@ fn state_path() -> Option<PathBuf> {
         CStr::from_ptr((*pw).pw_dir).to_string_lossy().into_owned()
     };
     Some(PathBuf::from(home).join("Library/Application Support/FastTrackUltra/mixer.json"))
+}
+
+fn load_clock(path: &Option<PathBuf>) -> ClockSource {
+    let p = path.as_ref().map(|p| p.with_file_name("device.json"));
+    p.and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+        .and_then(|v| v.get("clock").and_then(Value::as_str).and_then(ClockSource::parse))
+        .unwrap_or(ClockSource::Internal)
 }
 
 fn load(path: &Option<PathBuf>) -> Mixer {
@@ -101,6 +120,7 @@ impl Control {
     pub fn init() -> &'static Control {
         CONTROL.get_or_init(|| {
             let path = state_path();
+            let clock = load_clock(&path);
             Control {
                 mixer: Mutex::new(load(&path)),
                 path,
@@ -108,6 +128,8 @@ impl Control {
                 wake: Condvar::new(),
                 meters: Mutex::new(None),
                 status: Mutex::new(Status::default()),
+                clock: Mutex::new(clock),
+                clock_changed: AtomicBool::new(false),
             }
         })
     }
@@ -123,6 +145,41 @@ impl Control {
         if let Err(e) = write() {
             eprintln!("ftu-daemon: saving {} failed: {e}", p.display());
         }
+    }
+
+    /// Clock source setting. The stream may still be on the old one (see `take_clock_change`).
+    pub fn clock(&self) -> ClockSource {
+        *self.clock.lock().unwrap()
+    }
+
+    /// True once after the clock setting changed.
+    pub fn take_clock_change(&self) -> bool {
+        self.clock_changed.swap(false, Ordering::AcqRel)
+    }
+
+    /// Latest device status word, from the meter poll.
+    pub fn status_word(&self) -> Option<u16> {
+        self.meters.lock().unwrap().as_ref().map(|m| m.words[26] as u16)
+    }
+
+    fn set_clock(&self, c: ClockSource) -> Value {
+        if c == ClockSource::Spdif && self.status.lock().unwrap().port == Some("USB 1.1") {
+            return json!({ "error": "S/PDIF clock needs a USB 2.0 port" });
+        }
+        let mut cur = self.clock.lock().unwrap();
+        if *cur == c {
+            return json!({ "ok": true });
+        }
+        *cur = c;
+        if let Some(p) = self.path.as_ref().map(|p| p.with_file_name("device.json")) {
+            let _ = std::fs::create_dir_all(p.parent().unwrap());
+            if let Err(e) = std::fs::write(&p, json!({ "clock": c.name() }).to_string()) {
+                eprintln!("ftu-daemon: saving {} failed: {e}", p.display());
+            }
+        }
+        self.clock_changed.store(true, Ordering::Release);
+        self.wake.notify_all();
+        json!({ "ok": true })
     }
 
     fn changed(&self, m: &Mixer) {
@@ -173,6 +230,12 @@ impl Control {
             self.changed(&m);
             return json!({ "ok": true });
         }
+        if let Some(c) = req.get("clock").and_then(Value::as_str) {
+            return match ClockSource::parse(c) {
+                Some(c) => self.set_clock(c),
+                None => json!({ "error": format!("unknown clock '{c}' (internal or spdif)") }),
+            };
+        }
         if req.get("reset").and_then(Value::as_bool) == Some(true) {
             let mut m = self.mixer.lock().unwrap();
             *m = Mixer::default();
@@ -189,7 +252,13 @@ impl Control {
             "connected": st.connected,
             "streaming": st.sample_rate.is_some(),
             "sample_rate": st.sample_rate,
-            "clock": "internal",
+            "clock": self.clock().name(),
+            // Bit 12 set means the external clock is not valid (kext K:0xe52). Untested:
+            // on this unit the receiver locks to its own S/PDIF output.
+            "clock_locked": match (st.clock, word) {
+                (Some(ClockSource::Spdif), Some(w)) => Some(w & 0x1000 == 0),
+                _ => None,
+            },
             // Status bit 0: 1 = bus powered, 0 = PSU (docs/protocol.md).
             "port": st.port,
             "power": word.map(|w| if w & 1 != 0 { "usb" } else { "psu" }),
@@ -289,8 +358,10 @@ impl Control {
     }
 
     /// `Some(rate)` while the stream runs, `None` when it stops.
-    pub fn set_streaming(&self, rate: Option<u32>) {
-        self.status.lock().unwrap().sample_rate = rate;
+    pub fn set_streaming(&self, rate: Option<u32>, clock: Option<ClockSource>) {
+        let mut st = self.status.lock().unwrap();
+        st.sample_rate = rate;
+        st.clock = clock;
     }
 
     /// Called when the device goes away: meters are no longer valid.
