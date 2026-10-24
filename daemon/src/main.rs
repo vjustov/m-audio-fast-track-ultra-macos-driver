@@ -69,7 +69,7 @@ fn parse_args(mut it: impl Iterator<Item = String>) -> Args {
 
 fn usage() -> ! {
     eprintln!(
-        "usage: ftu-daemon run\n       ftu-daemon ctl get [state|meters|status] | set PATH VALUE [PATH VALUE ...] | clock internal|spdif | reset\n       ftu-daemon test [--rate HZ] [--seconds S] [--spdif] [--tone-channel 0-8] [--freq HZ] [--dbfs DB] [--record out.wav] [--switch]\n\
+        "usage: ftu-daemon run\n       ftu-daemon ctl get [state|meters|status] | set PATH VALUE [PATH VALUE ...] | clock internal|spdif | stall MS | reset\n       ftu-daemon test [--rate HZ] [--seconds S] [--spdif] [--tone-channel 0-8] [--freq HZ] [--dbfs DB] [--record out.wav] [--switch]\n\
          Tone channel 0 disables the tone. --switch streams 5 s on internal clock first, then\n\
          switches on the same handle, as the service does."
     );
@@ -310,7 +310,7 @@ fn run_service() -> Result<(), Box<dyn std::error::Error>> {
                     if last_report.elapsed() >= Duration::from_secs(1) {
                         last_report = Instant::now();
                         let s = stream.shm();
-                        let now = [
+                        let mut now = [
                             &s.play_underruns,
                             &s.usb_errors,
                             &s.plugin_late_writes,
@@ -328,7 +328,9 @@ fn run_service() -> Result<(), Box<dyn std::error::Error>> {
                             &s.max_callback_gap_us,
                         ]
                         .map(|c| c.load(Ordering::Relaxed));
-                        if now != reported {
+                        // The max gap is since the previous line, so it does not trigger one.
+                        if now[..14] != reported[..14] {
+                            now[14] = s.max_callback_gap_us.swap(0, Ordering::Relaxed);
                             eprintln!(
                                 "ftu-daemon: {} playback underruns {}, usb errors {}, plugin late writes {}, short reads {}, input jumps {}, output jumps {}, lead frames added {}, dropped {}, lead jumps {}, fallback packets {}, capture errors {}, playback errors {}, fifo overflows {}, stalls {}, max gap {} us, lead {} frames",
                                 wall_clock(),
@@ -358,6 +360,10 @@ fn run_service() -> Result<(), Box<dyn std::error::Error>> {
                     if r != 0 && r != rate && clock == ClockSource::Internal {
                         new_rate = Some(r);
                         break;
+                    }
+                    let stall = control.take_stall();
+                    if stall > 0 {
+                        stream.inject_stall(stall);
                     }
                     if control.take_clock_change() {
                         clock_change = true;
@@ -438,6 +444,7 @@ fn run_ctl(args: Vec<String>) -> i32 {
         ["get", "status"] | ["status"] => serde_json::json!({ "get": "status" }),
         ["reset"] => serde_json::json!({ "reset": true }),
         ["clock", c] => serde_json::json!({ "clock": c }),
+        ["stall", ms] => serde_json::json!({ "stall_ms": ms.parse::<u64>().unwrap_or_else(|_| usage()) }),
         ["set", rest @ ..] if !rest.is_empty() && rest.len() % 2 == 0 => {
             serde_json::json!({ "set": rest.chunks(2).map(|p| [p[0], p[1]]).collect::<Vec<_>>() })
         }

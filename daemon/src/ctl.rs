@@ -6,6 +6,7 @@
 //!   {"get": "meters"}                      -> latest meter snapshot
 //!   {"get": "status"}                      -> connection, port, streaming, rate, clock, power, firmware
 //!   {"clock": "internal" | "spdif"}        -> {"ok": true}; the stream restarts on the new clock
+//!   {"stall_ms": n}                        -> {"ok": true}; test hook, stalls the USB event thread once
 //!   {"put": {state}}                       -> replaces the whole state (settings file restore)
 //!   {"set": [["bus1.in1.level", "-6"], ..]} -> {"ok": true} or {"error": ".."}; all or nothing
 //!   {"reset": true}                        -> defaults
@@ -16,7 +17,7 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::ffi::{c_char, CStr, CString};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Condvar, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -65,6 +66,7 @@ pub struct Control {
     /// Clock source setting, saved in device.json. The service loop picks up changes.
     clock: Mutex<ClockSource>,
     clock_changed: AtomicBool,
+    stall_ms: AtomicU32,
 }
 
 /// Device sample rate from status word bits 8 to 9 (docs/protocol.md).
@@ -130,6 +132,7 @@ impl Control {
                 status: Mutex::new(Status::default()),
                 clock: Mutex::new(clock),
                 clock_changed: AtomicBool::new(false),
+                stall_ms: AtomicU32::new(0),
             }
         })
     }
@@ -155,6 +158,11 @@ impl Control {
     /// True once after the clock setting changed.
     pub fn take_clock_change(&self) -> bool {
         self.clock_changed.swap(false, Ordering::AcqRel)
+    }
+
+    /// Stall requested by the test hook, once.
+    pub fn take_stall(&self) -> u32 {
+        self.stall_ms.swap(0, Ordering::AcqRel)
     }
 
     /// Latest device status word, from the meter poll.
@@ -235,6 +243,10 @@ impl Control {
                 Some(c) => self.set_clock(c),
                 None => json!({ "error": format!("unknown clock '{c}' (internal or spdif)") }),
             };
+        }
+        if let Some(ms) = req.get("stall_ms").and_then(Value::as_u64) {
+            self.stall_ms.store(ms.min(1000) as u32, Ordering::Release);
+            return json!({ "ok": true });
         }
         if req.get("reset").and_then(Value::as_bool) == Some(true) {
             let mut m = self.mixer.lock().unwrap();

@@ -77,7 +77,7 @@ typedef struct {
     FTU_ATOMIC(uint64_t) playback_errors;        // failed playback transfers or packets
     FTU_ATOMIC(uint64_t) fifo_overflows;         // capture packet sizes dropped (size FIFO full)
     FTU_ATOMIC(uint64_t) callback_stalls;        // capture callbacks more than 3 ms apart
-    FTU_ATOMIC(uint64_t) max_callback_gap_us;    // longest gap between capture callbacks
+    FTU_ATOMIC(uint64_t) max_callback_gap_us;    // longest gap between capture callbacks since the daemon last logged it
     FTU_ATOMIC(uint64_t) lead_jumps;             // large lead errors fixed by moving the read position
 
     float capture[FTU_RING_FRAMES * FTU_CHANNELS];
