@@ -4,6 +4,8 @@
 //! Requests and replies are JSON strings carried in the XPC "ctl" op (xpc_shim.c):
 //!   {"get": "state"}                       -> the mixer state (mixer.rs)
 //!   {"get": "meters"}                      -> latest meter snapshot
+//!   {"get": "status"}                      -> connection, streaming, rate, power, firmware
+//!   {"put": {state}}                       -> replaces the whole state (settings file restore)
 //!   {"set": [["bus1.in1.level", "-6"], ..]} -> {"ok": true} or {"error": ".."}; all or nothing
 //!   {"reset": true}                        -> defaults
 
@@ -16,11 +18,23 @@ use std::path::PathBuf;
 use std::sync::{Condvar, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-const METER_PERIOD: Duration = Duration::from_millis(100);
+// Each GET_MEM returns the snapshot taken at the previous one, so the poll period is
+// also the meters' age.
+const METER_PERIOD: Duration = Duration::from_millis(20);
 
 struct Meters {
     words: [i16; 27],
+    /// Largest magnitude per meter since the last `get meters`, so short peaks between
+    /// client reads are not lost.
+    peak: [u16; 26],
     at: Instant,
+}
+
+#[derive(Default)]
+struct Status {
+    connected: bool,
+    sample_rate: Option<u32>, // Some while streaming
+    firmware: Option<String>,
 }
 
 pub struct Control {
@@ -29,6 +43,7 @@ pub struct Control {
     dirty: Mutex<bool>,
     wake: Condvar,
     meters: Mutex<Option<Meters>>,
+    status: Mutex<Status>,
 }
 
 static CONTROL: OnceLock<Control> = OnceLock::new();
@@ -77,6 +92,7 @@ impl Control {
                 dirty: Mutex::new(true),
                 wake: Condvar::new(),
                 meters: Mutex::new(None),
+                status: Mutex::new(Status::default()),
             }
         })
     }
@@ -109,6 +125,7 @@ impl Control {
             return match what {
                 "state" => serde_json::to_value(&*self.mixer.lock().unwrap()).unwrap(),
                 "meters" => self.meters_json(),
+                "status" => self.status_json(),
                 _ => json!({ "error": format!("unknown get '{what}'") }),
             };
         }
@@ -130,6 +147,17 @@ impl Control {
             }
             return json!({ "ok": true });
         }
+        if let Some(state) = req.get("put") {
+            let mut next: Mixer = match serde_json::from_value(state.clone()) {
+                Ok(m) => m,
+                Err(e) => return json!({ "error": format!("bad state: {e}") }),
+            };
+            next.normalize();
+            let mut m = self.mixer.lock().unwrap();
+            *m = next;
+            self.changed(&m);
+            return json!({ "ok": true });
+        }
         if req.get("reset").and_then(Value::as_bool) == Some(true) {
             let mut m = self.mixer.lock().unwrap();
             *m = Mixer::default();
@@ -139,16 +167,31 @@ impl Control {
         json!({ "error": "unknown request" })
     }
 
+    fn status_json(&self) -> Value {
+        let st = self.status.lock().unwrap();
+        let word = self.meters.lock().unwrap().as_ref().map(|m| m.words[26] as u16);
+        json!({
+            "connected": st.connected,
+            "streaming": st.sample_rate.is_some(),
+            "sample_rate": st.sample_rate,
+            "clock": "internal",
+            // Status bit 0: 1 = bus powered, 0 = PSU (docs/protocol.md).
+            "power": word.map(|w| if w & 1 != 0 { "usb" } else { "psu" }),
+            "firmware": st.firmware,
+            "driver": env!("CARGO_PKG_VERSION"),
+        })
+    }
+
     fn meters_json(&self) -> Value {
-        match &*self.meters.lock().unwrap() {
+        match &mut *self.meters.lock().unwrap() {
             Some(mt) => {
-                let w = &mt.words;
+                let w = std::mem::take(&mut mt.peak);
                 json!({
                     "in": &w[0..8],
                     "daw": &w[8..16],
                     "out": &w[16..24],
                     "extra": &w[24..26],
-                    "status": w[26] as u16,
+                    "status": mt.words[26] as u16,
                     "age_ms": mt.at.elapsed().as_millis() as u64,
                 })
             }
@@ -163,7 +206,13 @@ impl Control {
         let poll_due = self.meters.lock().unwrap().as_ref().map_or(true, |m| m.at.elapsed() >= METER_PERIOD);
         if poll_due {
             if let Ok(words) = dev.read_meters_raw() {
-                let prev = self.meters.lock().unwrap().replace(Meters { words, at: Instant::now() });
+                let mut meters = self.meters.lock().unwrap();
+                let mut peak = meters.as_ref().map_or([0; 26], |m| m.peak);
+                for (p, w) in peak.iter_mut().zip(&words) {
+                    *p = (*p).max(w.unsigned_abs());
+                }
+                let prev = meters.replace(Meters { words, peak, at: Instant::now() });
+                drop(meters);
                 // Power mode change (status bits 0 and 1): the DSP restarts, so resend everything.
                 if prev.is_some_and(|p| (p.words[26] ^ words[26]) & 0x3 != 0) {
                     eprintln!("ftu-daemon: power mode changed (status {:#06x}), restoring mixer", words[26] as u16);
@@ -209,9 +258,21 @@ impl Control {
         }
     }
 
+    pub fn device_opened(&self, dev: &Device) {
+        let mut st = self.status.lock().unwrap();
+        st.connected = true;
+        st.firmware = dev.firmware_version();
+    }
+
+    /// `Some(rate)` while the stream runs, `None` when it stops.
+    pub fn set_streaming(&self, rate: Option<u32>) {
+        self.status.lock().unwrap().sample_rate = rate;
+    }
+
     /// Called when the device goes away: meters are no longer valid.
     pub fn device_lost(&self) {
         self.meters.lock().unwrap().take();
+        *self.status.lock().unwrap() = Status::default();
     }
 }
 

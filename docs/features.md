@@ -68,7 +68,7 @@ Rows marked "host?" may be computed in the control panel and sent as raw matrix 
 | X5 | Per source pair: link (host?) | p.10 | | ✓ P (balance law) | | ✓ daemon |
 | X6 | Per source, buses 1/2 and 3/4 only: effect send level | p.10 | ? L3 | ✓ D (one per source) | ✓ u5 ctl9 | ✓ daemon |
 | X7 | Per bus: output fader | p.11 | | | ✓ unit 9 ctl2 = per-output gain, ctl1 = mute (ch 3 tested) | ✓ daemon (unit 9) |
-| X8 | Buses 1/2 and 3/4 only: DSP bypass | p.11 | | | | |
+| X8 | Buses 1/2 and 3/4 only: DSP bypass | p.11 | | | | ? daemon (zeroes the return) |
 | X9 | Mixer is independent of the recording path | p.10 | | | | |
 | X10 | Effect return level into outputs 1 to 4 (not in manual) | n/a | ✓ L3 | ✓ D (ctl 2) | ✓ by ear: ctl 2 (or 7) ch 1-4 = out 1-4, ctl 1 = mute. Not in meters | ✓ daemon |
 
@@ -94,9 +94,9 @@ Only sends from buses 1/2 and 3/4 reach the DSP. The manual gives no parameter r
 
 | ID | Feature | Manual | Linux | Static | Capture | Done |
 | --- | --- | --- | --- | --- | --- | --- |
-| L1 | Per source meters on each monitor tab (16 sources) | p.10 | | ✓ D | | |
-| L2 | Per bus output meters | p.11 | | ✓ D | | |
-| L3 | Meters tab: all 8 hardware inputs and 8 outputs | p.14 | | ✓ D | ✓ (read twice) | |
+| L1 | Per source meters on each monitor tab (16 sources) | p.10 | | ✓ D | | ✓ panel |
+| L2 | Per bus output meters | p.11 | | ✓ D | | ✓ panel |
+| L3 | Meters tab: all 8 hardware inputs and 8 outputs | p.14 | | ✓ D | ✓ (read twice) | ✓ panel |
 
 ## Host-side features
 
@@ -104,10 +104,10 @@ No USB traffic expected. Reimplement in the new control panel.
 
 | ID | Feature | Manual | Linux | Static | Capture | Done |
 | --- | --- | --- | --- | --- | --- | --- |
-| H1 | Save mixer and routing settings to a file | p.13 | | | n/a | |
-| H2 | Restore settings from a file | p.13 | | | n/a | |
+| H1 | Save mixer and routing settings to a file | p.13 | | | n/a | ✓ panel |
+| H2 | Restore settings from a file | p.13 | | | n/a | ✓ panel |
 | H3 | Flow tab: static signal flow graphic | p.14 | | | n/a | |
-| H4 | About tab: hardware and driver versions | p.15 | | ✓ D (bcdDevice) | | |
+| H4 | About tab: hardware and driver versions | p.15 | | ✓ D (bcdDevice) | | ✓ panel |
 
 ## Out of scope
 

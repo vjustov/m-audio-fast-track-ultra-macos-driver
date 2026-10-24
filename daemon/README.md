@@ -36,7 +36,8 @@ The firmware cannot report its own state (GET returns canned values), so the dae
 ```sh
 D="/Library/Application Support/FastTrackUltra/ftu-daemon"
 "$D" ctl get                       # full state as JSON
-"$D" ctl meters                    # peak meters in dBFS, refreshed every 100 ms
+"$D" ctl meters                    # peak meters in dBFS, polled every 20 ms
+"$D" ctl status                    # connected, streaming, rate, power, firmware
 "$D" ctl set bus1.in1.level -6 bus1.in1.pan 0.5
 "$D" ctl reset                     # defaults: DAW 1-8 to outputs 1-8, inputs off
 ```
@@ -51,9 +52,11 @@ D="/Library/Application Support/FastTrackUltra/ftu-daemon"
 | `fx.volume`, `fx.duration`, `fx.feedback` | 0 to 1 |
 | `fx.send.<src>` | dB or `off`. One send per source, shared by all buses |
 | `fx.return.<1-4>` | dB or `off`, effect return into outputs 1 to 4 |
+| `fx.bypass.<1-2>` | `on` silences the effect return on bus 1 or 2. No firmware bypass request is known |
+| `link.out<1-8>` | Links an output pair's faders in clients. No effect on the device |
 | `out<1-8>.level`, `out<1-8>.mute` | Output gain after the mixer (unit 9) |
 
-Sources are `in1` to `in8` (7 and 8 are S/PDIF) and `daw1` to `daw8`. Several pairs in one `set` apply together or not at all.
+Sources are `in1` to `in8` (7 and 8 are S/PDIF) and `daw1` to `daw8`. Several pairs in one `set` apply together or not at all. Clients can also replace the whole state with `{"put": state}` (used for settings files). `get meters` returns the peak since the previous read.
 
 ## Design notes
 

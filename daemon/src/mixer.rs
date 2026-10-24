@@ -51,6 +51,9 @@ pub struct Fx {
     pub feedback: f64,
     pub sends: Vec<Option<f64>>,
     pub returns: Vec<Option<f64>>,
+    /// Per bus 1/2 and 3/4: silence the effect return on that bus. The firmware has no
+    /// known bypass request (docs/protocol.md, Still open), so this zeroes unit 7.
+    pub bypass: Vec<bool>,
 }
 
 impl Default for Fx {
@@ -62,6 +65,7 @@ impl Default for Fx {
             feedback: 0.5,
             sends: vec![None; SOURCES],
             returns: vec![Some(0.0); RETURNS],
+            bypass: vec![false; RETURNS / 2],
         }
     }
 }
@@ -89,6 +93,9 @@ pub struct Mixer {
     pub link: Vec<bool>,
     pub fx: Fx,
     pub outputs: Vec<Output>,
+    /// Stereo link per output pair. Clients move both faders together; no effect on
+    /// the device.
+    pub out_link: Vec<bool>,
 }
 
 impl Default for Mixer {
@@ -104,6 +111,7 @@ impl Default for Mixer {
             link: vec![true; SOURCES / 2],
             fx: Fx::default(),
             outputs: vec![Output::default(); OUTPUTS],
+            out_link: vec![true; OUTPUTS / 2],
         }
     }
 }
@@ -195,7 +203,9 @@ impl Mixer {
         self.link.resize(SOURCES / 2, true);
         self.fx.sends.resize(SOURCES, None);
         self.fx.returns.resize(RETURNS, Some(0.0));
+        self.fx.bypass.resize(RETURNS / 2, false);
         self.outputs.resize(OUTPUTS, Output::default());
+        self.out_link.resize(OUTPUTS / 2, true);
         if self.fx.program as usize >= PROGRAMS.len() {
             self.fx.program = d.fx.program;
         }
@@ -242,7 +252,8 @@ impl Mixer {
         v.push(Ctl::new(UNIT_FX, 3, 0, (unit(self.fx.duration, 32512.0) as u16).to_le_bytes().to_vec()));
         v.push(Ctl::new(UNIT_FX, 4, 0, vec![unit(self.fx.feedback, 127.0) as u8]));
         for (o, ret) in self.fx.returns.iter().enumerate() {
-            v.push(Ctl::new(UNIT_RETURN, CTL_VOLUME, o + 1, s16(db_word(*ret))));
+            let ret = if self.fx.bypass[o / 2] { None } else { *ret };
+            v.push(Ctl::new(UNIT_RETURN, CTL_VOLUME, o + 1, s16(db_word(ret))));
             v.push(Ctl::new(UNIT_RETURN, CTL_MUTE, o + 1, s16(0)));
         }
         for (o, out) in self.outputs.iter().enumerate() {
@@ -256,11 +267,12 @@ impl Mixer {
 
     /// Applies one `path = value` assignment. Paths:
     ///   bus<1-4>.<src>.level|pan|mute|solo    src = in1..in8, daw1..daw8
-    ///   link.<src>                            either source of the pair
+    ///   link.<src>, link.out<1-8>             either member of the pair
     ///   fx.program                            room1..echo or 0..7
     ///   fx.volume|duration|feedback           0..1
     ///   fx.send.<src>                         dB
     ///   fx.return.<1-4>                       dB
+    ///   fx.bypass.<1-2>                       bus 1 or 2
     ///   out<1-8>.level|mute
     pub fn set(&mut self, path: &str, value: &str) -> Result<(), String> {
         let parts: Vec<&str> = path.split('.').collect();
@@ -277,6 +289,10 @@ impl Mixer {
                     _ => return Err(format!("bad field '{field}', use level, pan, mute or solo")),
                 }
             }
+            ["link", out] if out.starts_with("out") => {
+                let o = index(&out[3..], OUTPUTS).ok_or_else(|| format!("bad output '{out}', use out1..out8"))?;
+                self.out_link[o / 2] = boolean(value)?;
+            }
             ["link", src] => self.link[source(src)? / 2] = boolean(value)?,
             ["fx", "program"] => {
                 self.fx.program = match PROGRAMS.iter().position(|p| *p == value) {
@@ -291,6 +307,10 @@ impl Mixer {
             ["fx", "return", o] => {
                 let o = index(o, RETURNS).ok_or_else(|| format!("bad return '{o}', use 1..4"))?;
                 self.fx.returns[o] = db(value)?;
+            }
+            ["fx", "bypass", b] => {
+                let b = index(b, RETURNS / 2).ok_or_else(|| format!("bad bus '{b}', bypass exists on bus 1 and 2"))?;
+                self.fx.bypass[b] = boolean(value)?;
             }
             [out, field] if out.starts_with("out") => {
                 let o = index(&out[3..], OUTPUTS).ok_or_else(|| format!("bad output '{out}', use out1..out8"))?;
@@ -397,6 +417,9 @@ mod tests {
         assert_eq!(word(&m, 5, 9, 1), -2560);
         assert_eq!(word(&m, 9, 2, 3), -5120);
         assert_eq!(word(&m, 9, 1, 3), 1);
+        m.set("fx.bypass.1", "on").unwrap();
+        assert_eq!(word(&m, 7, 2, 1), OFF);
+        assert_eq!(word(&m, 7, 2, 3), 0);
         assert!(m.set("bus5.in1.level", "0").is_err());
         assert!(m.set("bus1.in1.level", "3").is_err());
     }

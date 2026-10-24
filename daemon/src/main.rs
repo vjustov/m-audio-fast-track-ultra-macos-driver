@@ -64,7 +64,7 @@ fn parse_args(mut it: impl Iterator<Item = String>) -> Args {
 
 fn usage() -> ! {
     eprintln!(
-        "usage: ftu-daemon run\n       ftu-daemon ctl get [state|meters] | set PATH VALUE [PATH VALUE ...] | reset\n       ftu-daemon test [--rate HZ] [--seconds S] [--spdif] [--tone-channel 0-8] [--freq HZ] [--dbfs DB] [--record out.wav]\n\
+        "usage: ftu-daemon run\n       ftu-daemon ctl get [state|meters|status] | set PATH VALUE [PATH VALUE ...] | reset\n       ftu-daemon test [--rate HZ] [--seconds S] [--spdif] [--tone-channel 0-8] [--freq HZ] [--dbfs DB] [--record out.wav]\n\
          Tone channel 0 disables the tone."
     );
     std::process::exit(2)
@@ -268,12 +268,15 @@ fn run_service() -> Result<(), Box<dyn std::error::Error>> {
                 continue;
             }
         };
+        control.device_opened(&dev);
         // Restore the mixer before audio starts.
         control.service(&dev, &mut sent, Duration::ZERO);
         let cfg = StreamConfig { sample_rate: rate, clock: ClockSource::Internal };
         match Stream::start(&mut dev, shm.clone(), cfg) {
             Ok(stream) => {
-                eprintln!("ftu-daemon: streaming at {} Hz", stream.shm().sample_rate.load(Ordering::Acquire));
+                let streaming_rate = stream.shm().sample_rate.load(Ordering::Acquire);
+                eprintln!("ftu-daemon: streaming at {streaming_rate} Hz");
+                control.set_streaming(Some(streaming_rate));
                 let mut new_rate = None;
                 let mut last_report = Instant::now();
                 let mut reported = (0u64, 0u64);
@@ -304,6 +307,7 @@ fn run_service() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     control.service(&dev, &mut sent, Duration::from_millis(50));
                 }
+                control.set_streaming(None);
                 let stats = stream.stop(&mut dev);
                 match new_rate {
                     Some(r) => {
@@ -333,6 +337,7 @@ fn run_ctl(args: Vec<String>) -> i32 {
     let req = match args.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
         ["get"] | ["get", "state"] => serde_json::json!({ "get": "state" }),
         ["get", "meters"] | ["meters"] => serde_json::json!({ "get": "meters" }),
+        ["get", "status"] | ["status"] => serde_json::json!({ "get": "status" }),
         ["reset"] => serde_json::json!({ "reset": true }),
         ["set", rest @ ..] if !rest.is_empty() && rest.len() % 2 == 0 => {
             serde_json::json!({ "set": rest.chunks(2).map(|p| [p[0], p[1]]).collect::<Vec<_>>() })

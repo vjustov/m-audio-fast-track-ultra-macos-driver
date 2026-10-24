@@ -138,6 +138,19 @@ impl Device {
         Ok(d[0] as u32 | (d[1] as u32) << 8 | (d[2] as u32) << 16)
     }
 
+    /// Firmware version from the device descriptor's bcdDevice, for example 0x0151 = 1.51.
+    pub fn firmware_version(&self) -> Option<String> {
+        // SAFETY: handle valid; the descriptor is plain data filled by libusb.
+        let bcd = unsafe {
+            let mut d = std::mem::zeroed::<ffi::libusb_device_descriptor>();
+            if ffi::libusb_get_device_descriptor(ffi::libusb_get_device(self.handle), &mut d) < 0 {
+                return None;
+            }
+            d.bcdDevice
+        };
+        Some(format!("{:x}.{:02x}", bcd >> 8, bcd & 0xff))
+    }
+
     /// UAC1 SET_CUR to a unit on the control interface. Units 5 to 9: docs/protocol.md.
     pub fn set_cur(&self, unit: u8, control: u8, channel: u8, data: &[u8]) -> Result<(), UsbError> {
         let mut d = data.to_vec();
