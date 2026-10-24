@@ -33,6 +33,14 @@ const IN_PACKETS: usize = 8;
 const IN_XFERS: usize = 24;
 const OUT_PACKETS: usize = 8;
 const OUT_XFERS: usize = 16;
+// Lead control: smoothing per playback transfer (1 ms), and the minimum number of
+// transfers between corrections.
+const LEAD_ALPHA: f64 = 0.05;
+const LEAD_HOLD: u32 = 20;
+// Smoothed lead error, in packets, that triggers a one-frame correction, and the error
+// that is fixed in one jump instead.
+const LEAD_BAND_PACKETS: f64 = 2.0;
+const LEAD_JUMP_PACKETS: f64 = 4.0;
 const FIFO_LEN: usize = 4096;
 const S24_SCALE: f32 = 8_388_608.0;
 // Clock loop for 1 ms updates, 0.5 Hz bandwidth: omega = 2*pi*0.5*0.001,
@@ -73,6 +81,17 @@ struct Engine {
     // prefilled playback queue. Drift away from it means the device consumes at a
     // different rate than we send, or that fallback packets were used.
     target_lead: i64,
+    // Lead error smoothed over about 20 ms, sampled once per playback transfer. The raw
+    // error swings by about one transfer either way as capture transfers complete
+    // between playback transfers, so it cannot be acted on directly.
+    lead_err_avg: f64,
+    // Playback transfers since the last correction, and the correction (-1, 0, 1)
+    // the next packet applies.
+    since_correction: u32,
+    correction: i64,
+    // Host time of the previous capture callback, for stall detection.
+    last_cb_ticks: u64,
+    ns_per_tick: f64,
     // True while the writer is behind the read position, so a stretch of missing
     // packets counts as one underrun.
     starved: bool,
@@ -96,9 +115,47 @@ impl Engine {
         unsafe { &*self.shm }
     }
 
+    /// Decides once per playback transfer whether to correct the lead. With implicit
+    /// feedback the rates match, so the lead only moves after fallback packets or lost
+    /// capture packets. Each correction shifts output timing by one frame, so they are
+    /// limited to one per LEAD_HOLD transfers, and only when the smoothed error leaves
+    /// a band of two packets.
+    fn plan_correction(&mut self) {
+        if self.cap_pos == 0 {
+            return;
+        }
+        let err = (self.play_pos as i64 - self.cap_pos as i64 - self.target_lead) as f64;
+        self.lead_err_avg += LEAD_ALPHA * (err - self.lead_err_avg);
+        self.since_correction += 1;
+        let per_packet = (self.rate / 8000) as f64;
+        if self.since_correction < LEAD_HOLD {
+            return;
+        }
+        if self.lead_err_avg.abs() > LEAD_JUMP_PACKETS * per_packet {
+            // A disturbance moved the lead by many frames at once, and the output has
+            // already jumped. Fix it in one step: skip ahead in the playback ring
+            // (zeroing what is skipped) or step back (replaying zeroed frames, a short
+            // silence). One glitch instead of one per correction.
+            let jump = self.lead_err_avg.round() as i64;
+            if jump < 0 {
+                for f in 0..(-jump) as u64 {
+                    let p = self.shm().playback_frame(self.play_pos + f);
+                    // SAFETY: frames ahead of play_pos; the writer is far ahead of them.
+                    unsafe { std::ptr::write_bytes(p, 0, CHANNELS) };
+                }
+            }
+            self.play_pos = (self.play_pos as i64 - jump) as u64;
+            self.lead_err_avg -= jump as f64;
+            self.since_correction = 0;
+            self.shm().lead_jumps.fetch_add(1, Ordering::Relaxed);
+        } else if self.lead_err_avg.abs() > LEAD_BAND_PACKETS * per_packet {
+            self.correction = if self.lead_err_avg > 0.0 { -1 } else { 1 };
+            self.since_correction = 0;
+        }
+    }
+
     /// Frames for the next playback packet: the size of the matching capture packet
-    /// (implicit feedback), corrected by one frame when the playback lead drifts more
-    /// than one packet from its target.
+    /// (implicit feedback), plus a pending lead correction.
     fn next_frame_count(&mut self) -> usize {
         let mut n = if self.fifo_tail != self.fifo_head {
             let n = self.fifo[self.fifo_tail % FIFO_LEN] as usize;
@@ -106,19 +163,22 @@ impl Engine {
             n
         } else {
             self.stats.fallback_packets += 1;
+            self.shm().fallback_packets.fetch_add(1, Ordering::Relaxed);
             self.nominal_acc += self.rate as f64 / 8000.0;
             let n = self.nominal_acc as usize;
             self.nominal_acc -= n as f64;
             n
         };
-        if self.cap_pos > 0 {
-            let err = self.play_pos as i64 - self.cap_pos as i64 - self.target_lead;
-            let per_packet = (self.rate / 8000) as i64;
-            if err > per_packet {
+        match std::mem::take(&mut self.correction) {
+            -1 => {
                 n = n.saturating_sub(1);
-            } else if err < -per_packet {
-                n += 1;
+                self.shm().lead_frames_dropped.fetch_add(1, Ordering::Relaxed);
             }
+            1 => {
+                n += 1;
+                self.shm().lead_frames_added.fetch_add(1, Ordering::Relaxed);
+            }
+            _ => {}
         }
         n.clamp(1, MAX_FRAMES_PER_PACKET)
     }
@@ -131,6 +191,7 @@ impl Engine {
         unsafe {
             let shm = &*shm;
             let write_pos = shm.play_write_pos.load(Ordering::Acquire);
+            self.plan_correction();
             let mut offset = 0usize;
             for i in 0..(*t).num_iso_packets as usize {
                 let frames = self.next_frame_count().min(MAX_FRAMES_PER_PACKET);
@@ -177,12 +238,15 @@ impl Engine {
                 let d = &*(*t).iso_packet_desc.as_ptr().add(i);
                 if d.status != LIBUSB_TRANSFER_COMPLETED {
                     self.stats.packet_errors += 1;
+                    shm.capture_errors.fetch_add(1, Ordering::Relaxed);
                     continue;
                 }
                 let frames = (d.actual_length as usize / FRAME_BYTES).min(MAX_FRAMES_PER_PACKET);
                 if self.fifo_head - self.fifo_tail < FIFO_LEN {
                     self.fifo[self.fifo_head % FIFO_LEN] = frames as u16;
                     self.fifo_head += 1;
+                } else {
+                    shm.fifo_overflows.fetch_add(1, Ordering::Relaxed);
                 }
                 let src = ffi::libusb_get_iso_packet_buffer_simple(t, i as u32);
                 for f in 0..frames {
@@ -260,10 +324,20 @@ extern "system" fn in_cb(t: *mut ffi::libusb_transfer) {
     // SAFETY: user_data is the Engine pointer set at allocation; callbacks run only on
     // the event thread, so this is the only live &mut.
     let e = unsafe { &mut *((*t).user_data as *mut Engine) };
+    let now = rt::now_ticks();
+    if e.last_cb_ticks != 0 {
+        let gap_us = ((now - e.last_cb_ticks) as f64 * e.ns_per_tick / 1000.0) as u64;
+        if gap_us > 3000 {
+            e.shm().callback_stalls.fetch_add(1, Ordering::Relaxed);
+        }
+        e.shm().max_callback_gap_us.fetch_max(gap_us, Ordering::Relaxed);
+    }
+    e.last_cb_ticks = now;
     if unsafe { (*t).status } == LIBUSB_TRANSFER_COMPLETED {
         e.consume_in(t);
     } else {
         e.stats.packet_errors += 1;
+        e.shm().capture_errors.fetch_add(1, Ordering::Relaxed);
     }
     e.resubmit(t, "capture");
 }
@@ -274,10 +348,12 @@ extern "system" fn out_cb(t: *mut ffi::libusb_transfer) {
     unsafe {
         if (*t).status != LIBUSB_TRANSFER_COMPLETED {
             e.stats.packet_errors += 1;
+            e.shm().playback_errors.fetch_add(1, Ordering::Relaxed);
         }
         for i in 0..(*t).num_iso_packets as usize {
             if (*(*t).iso_packet_desc.as_ptr().add(i)).status != LIBUSB_TRANSFER_COMPLETED {
                 e.stats.packet_errors += 1;
+                e.shm().playback_errors.fetch_add(1, Ordering::Relaxed);
             }
         }
     }
@@ -362,6 +438,11 @@ impl Stream {
             play_pos: 0,
             target_lead: (OUT_XFERS * OUT_PACKETS) as i64 * rate as i64 / 8000,
             starved: false,
+            lead_err_avg: 0.0,
+            since_correction: 0,
+            correction: 0,
+            last_cb_ticks: 0,
+            ns_per_tick: rt::ns_per_tick(),
             clock_init: false,
             anchor_sample: 0,
             anchor_host: 0.0,

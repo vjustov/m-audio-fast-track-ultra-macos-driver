@@ -24,7 +24,7 @@
 #endif
 
 #define FTU_SHM_MAGIC 0x31555446u  // "FTU1"
-#define FTU_SHM_VERSION 3u
+#define FTU_SHM_VERSION 6u
 #define FTU_CHANNELS 8u
 #define FTU_RING_FRAMES 16384u  // power of two; 341 ms at 48 kHz, 170 ms at 96 kHz
 
@@ -58,11 +58,27 @@ typedef struct {
     // Written by the plugin.
     FTU_ATOMIC(uint64_t) plugin_late_writes;  // output cycles that arrived after play_read_pos
     FTU_ATOMIC(uint64_t) plugin_short_reads;  // input cycles not yet captured (zero-filled)
+    // IO cycles that did not start where the previous one ended (same stream generation):
+    // the HAL's timeline skipped or repeated frames.
+    FTU_ATOMIC(uint64_t) plugin_input_jumps;
+    FTU_ATOMIC(uint64_t) plugin_output_jumps;
+    // Playback packets the daemon lengthened or shortened by one frame to pull the
+    // playback lead back to its target. Each one shifts output timing by one frame.
+    FTU_ATOMIC(uint64_t) lead_frames_added;
+    FTU_ATOMIC(uint64_t) lead_frames_dropped;
 
     // Clock the running stream uses: 0 internal, 1 S/PDIF. Written by the daemon at stream start.
     FTU_ATOMIC(uint32_t) clock_source;
+    uint32_t pad0;
 
-    uint8_t reserved[44];
+    // Stream diagnostics, written by the daemon's USB thread.
+    FTU_ATOMIC(uint64_t) fallback_packets;       // playback packets sized without a capture packet
+    FTU_ATOMIC(uint64_t) capture_errors;         // failed capture transfers or packets
+    FTU_ATOMIC(uint64_t) playback_errors;        // failed playback transfers or packets
+    FTU_ATOMIC(uint64_t) fifo_overflows;         // capture packet sizes dropped (size FIFO full)
+    FTU_ATOMIC(uint64_t) callback_stalls;        // capture callbacks more than 3 ms apart
+    FTU_ATOMIC(uint64_t) max_callback_gap_us;    // longest gap between capture callbacks
+    FTU_ATOMIC(uint64_t) lead_jumps;             // large lead errors fixed by moving the read position
 
     float capture[FTU_RING_FRAMES * FTU_CHANNELS];
     float playback[FTU_RING_FRAMES * FTU_CHANNELS];

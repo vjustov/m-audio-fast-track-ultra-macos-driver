@@ -4,7 +4,7 @@
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 pub const MAGIC: u32 = 0x3155_5446; // "FTU1"
-pub const VERSION: u32 = 3;
+pub const VERSION: u32 = 6;
 pub const CHANNELS: usize = 8;
 pub const RING_FRAMES: usize = 16384;
 const RING_SAMPLES: usize = RING_FRAMES * CHANNELS;
@@ -34,18 +34,29 @@ pub struct Shm {
 
     pub plugin_late_writes: AtomicU64,
     pub plugin_short_reads: AtomicU64,
+    pub plugin_input_jumps: AtomicU64,
+    pub plugin_output_jumps: AtomicU64,
+    pub lead_frames_added: AtomicU64,
+    pub lead_frames_dropped: AtomicU64,
 
     /// 0 internal, 1 S/PDIF: the clock the running stream uses.
     pub clock_source: AtomicU32,
+    _pad0: u32,
 
-    _reserved: [u8; 44],
+    pub fallback_packets: AtomicU64,
+    pub capture_errors: AtomicU64,
+    pub playback_errors: AtomicU64,
+    pub fifo_overflows: AtomicU64,
+    pub callback_stalls: AtomicU64,
+    pub max_callback_gap_us: AtomicU64,
+    pub lead_jumps: AtomicU64,
 
     capture: [f32; RING_SAMPLES],
     playback: [f32; RING_SAMPLES],
 }
 
-// Must match sizeof(ftu_shm_t). Header is 168 bytes.
-const _: () = assert!(std::mem::size_of::<Shm>() == 168 + 2 * RING_SAMPLES * 4);
+// Must match sizeof(ftu_shm_t). Header is 216 bytes.
+const _: () = assert!(std::mem::size_of::<Shm>() == 216 + 2 * RING_SAMPLES * 4);
 
 #[derive(Clone, Copy, Debug)]
 pub struct ClockAnchor {
