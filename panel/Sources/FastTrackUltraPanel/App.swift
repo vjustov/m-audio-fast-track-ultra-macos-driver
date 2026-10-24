@@ -33,7 +33,7 @@ struct PanelApp: App {
         }
 
         Window("About Fast Track Ultra", id: "about") {
-            AboutView().environmentObject(store).frame(width: 460, height: 220)
+            AboutView().environmentObject(store).frame(width: 620, height: 330)
         }
         .windowResizability(.contentSize)
     }
