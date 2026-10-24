@@ -337,20 +337,76 @@ struct MetersView: View {
     }
 }
 
+/// The vendor panel's about tab: status, versions and support links. Its bootloader,
+/// hardware model and GUID fields have no known source (the device has no serial string).
 struct AboutView: View {
     @EnvironmentObject var store: Store
 
+    private static let repo = "https://github.com/vjustov/m-audio-fast-track-ultra-macos-driver"
+    private var panelVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let s = store.status
+        VStack(alignment: .leading, spacing: 12) {
             Text("Fast Track Ultra Control Panel").font(.title2.bold())
-            Text("Driver (ftu-daemon): \(store.status?.driver ?? "n/a")")
-            Text("Firmware: \(store.status?.firmware ?? "n/a")")
-            Text("Community driver for macOS. Not affiliated with M-Audio or Avid.").foregroundStyle(.secondary)
-            Link("github.com/vjustov/m-audio-fast-track-ultra-macos-driver",
-                 destination: URL(string: "https://github.com/vjustov/m-audio-fast-track-ultra-macos-driver")!)
+            HStack(alignment: .top, spacing: 12) {
+                GroupBox("Status") {
+                    Grid(alignment: .leading, verticalSpacing: 4) {
+                        field("daemon", store.reachable ? "running" : "not running")
+                        field("device", s?.connected == true ? "connected" : "not connected")
+                        field("streaming", s.map { $0.streaming ? "yes, \(rateText($0.sample_rate))" : "no" } ?? "n/a")
+                        field("port", s?.port ?? "n/a")
+                        field("power (current)", powerText(s?.power))
+                        field("power (startup)", powerText(s?.startup_power))
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                GroupBox("Versions") {
+                    Grid(alignment: .leading, verticalSpacing: 4) {
+                        field("panel", panelVersion)
+                        field("driver", s?.driver ?? "n/a")
+                        field("firmware", s?.firmware ?? "n/a")
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                GroupBox("Support") {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Link("Source code", destination: URL(string: Self.repo)!)
+                        Link("Report a problem", destination: URL(string: Self.repo + "/issues")!)
+                        Link("Documentation", destination: URL(string: Self.repo + "/tree/main/docs")!)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .font(.system(size: 11))
+            if s?.power == "usb" {
+                Text("The device is running on USB bus power. Only analog inputs and outputs 1 and 2 "
+                     + "and S/PDIF are available. Connect the power adapter to use all channels.")
+                    .font(.system(size: 11))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Spacer()
+            Text("Community driver for macOS. Not affiliated with M-Audio or Avid.")
+                .font(.caption).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(24)
+        .padding(20)
+    }
+
+    private func field(_ k: String, _ v: String) -> some View {
+        GridRow {
+            Text(k).foregroundStyle(.secondary).gridColumnAlignment(.trailing)
+            Text(v).textSelection(.enabled)
+        }
+    }
+
+    private func powerText(_ p: String?) -> String {
+        switch p {
+        case "usb": return "bus powered"
+        case "psu": return "power supply"
+        default: return "n/a"
+        }
     }
 }

@@ -4,7 +4,7 @@
 //! Requests and replies are JSON strings carried in the XPC "ctl" op (xpc_shim.c):
 //!   {"get": "state"}                       -> the mixer state (mixer.rs)
 //!   {"get": "meters"}                      -> latest meter snapshot
-//!   {"get": "status"}                      -> connection, streaming, rate, power, firmware
+//!   {"get": "status"}                      -> connection, port, streaming, rate, power, firmware
 //!   {"put": {state}}                       -> replaces the whole state (settings file restore)
 //!   {"set": [["bus1.in1.level", "-6"], ..]} -> {"ok": true} or {"error": ".."}; all or nothing
 //!   {"reset": true}                        -> defaults
@@ -49,6 +49,7 @@ struct Status {
     connected: bool,
     sample_rate: Option<u32>, // Some while streaming
     firmware: Option<String>,
+    port: Option<&'static str>,
 }
 
 pub struct Control {
@@ -190,7 +191,10 @@ impl Control {
             "sample_rate": st.sample_rate,
             "clock": "internal",
             // Status bit 0: 1 = bus powered, 0 = PSU (docs/protocol.md).
+            "port": st.port,
             "power": word.map(|w| if w & 1 != 0 { "usb" } else { "psu" }),
+            // Bit 1, the vendor's "startup power mode". It tracks bit 0 live; real meaning unknown.
+            "startup_power": word.map(|w| if w & 2 != 0 { "usb" } else { "psu" }),
             "firmware": st.firmware,
             "driver": env!("CARGO_PKG_VERSION"),
         })
@@ -281,6 +285,7 @@ impl Control {
         let mut st = self.status.lock().unwrap();
         st.connected = true;
         st.firmware = dev.firmware_version();
+        st.port = Some(dev.link_speed());
     }
 
     /// `Some(rate)` while the stream runs, `None` when it stops.

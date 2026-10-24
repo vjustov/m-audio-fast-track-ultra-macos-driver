@@ -47,7 +47,9 @@ struct DeviceStatus: Decodable, Equatable {
     var streaming: Bool
     var sample_rate: Int?
     var clock: String
+    var port: String?
     var power: String?
+    var startup_power: String?
     var firmware: String?
     var driver: String
 }

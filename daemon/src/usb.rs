@@ -151,6 +151,17 @@ impl Device {
         Some(format!("{:x}.{:02x}", bcd >> 8, bcd & 0xff))
     }
 
+    /// Negotiated link: "USB 2.0" at high speed, "USB 1.1" at full speed.
+    pub fn link_speed(&self) -> &'static str {
+        // SAFETY: handle valid for the lifetime of self.
+        match unsafe { ffi::libusb_get_device_speed(ffi::libusb_get_device(self.handle)) } {
+            3 => "USB 2.0",
+            1 | 2 => "USB 1.1",
+            4.. => "USB 3",
+            _ => "unknown",
+        }
+    }
+
     /// UAC1 SET_CUR to a unit on the control interface. Units 5 to 9: docs/protocol.md.
     pub fn set_cur(&self, unit: u8, control: u8, channel: u8, data: &[u8]) -> Result<(), UsbError> {
         let mut d = data.to_vec();
