@@ -25,8 +25,9 @@
 #include <cstddef>
 
 // Layout must match the Rust mirror (daemon/src/shm.rs asserts the same size).
-static_assert(offsetof(ftu_shm_t, capture) == 168, "ftu_shm_t header layout");
-static_assert(sizeof(ftu_shm_t) == 168 + 2 * FTU_RING_FRAMES * FTU_CHANNELS * sizeof(float),
+static_assert(offsetof(ftu_shm_t, capture) == 216, "ftu_shm_t header layout");
+static_assert(offsetof(ftu_shm_t, plugin_input_jumps) % 8 == 0, "ftu_shm_t counter alignment");
+static_assert(sizeof(ftu_shm_t) == 216 + 2 * FTU_RING_FRAMES * FTU_CHANNELS * sizeof(float),
     "ftu_shm_t size");
 
 namespace {
@@ -392,6 +393,9 @@ public:
     OSStatus OnStartIO() override
     {
         link_->EnsureConnected();
+        // A new IO session starts a new timeline: do not count its first cycle as a jump.
+        in_.Reset();
+        out_.Reset();
         // The daemon may be at another rate (its default, or a previous session's).
         // Core Audio's nominal rate wins, except on S/PDIF clock, where the source
         // sets the rate and the daemon ignores requests.
@@ -418,6 +422,9 @@ public:
             return;
         }
         const uint64_t t = static_cast<uint64_t>(timestamp);
+        if (in_.Jumped(s, t, frames)) {
+            const_cast<ftu_shm_t*>(s)->plugin_input_jumps.fetch_add(1, std::memory_order_relaxed);
+        }
         const uint64_t written = s->cap_write_pos.load(std::memory_order_acquire);
         if (t + frames > written || written - t > FTU_RING_FRAMES) {
             // Not captured yet, or already overwritten.
@@ -441,6 +448,9 @@ public:
         }
         auto* shm = const_cast<ftu_shm_t*>(s);
         const uint64_t t = static_cast<uint64_t>(timestamp);
+        if (out_.Jumped(s, t, frames)) {
+            shm->plugin_output_jumps.fetch_add(1, std::memory_order_relaxed);
+        }
         const uint64_t readPos = shm->play_read_pos.load(std::memory_order_acquire);
         if (t < readPos || t + frames > readPos + FTU_RING_FRAMES) {
             shm->plugin_late_writes.fetch_add(1, std::memory_order_relaxed);
@@ -454,6 +464,33 @@ public:
     }
 
 private:
+    // Checks that each IO cycle starts where the previous one ended. Several input
+    // clients read the same cycle, so a repeat of the last start is not a jump.
+    // IO thread only.
+    struct Timeline
+    {
+        uint64_t generation = UINT64_MAX;
+        uint64_t start = 0;
+        uint64_t end = 0;
+
+        void Reset()
+        {
+            generation = UINT64_MAX;
+        }
+
+        bool Jumped(const ftu_shm_t* s, uint64_t t, UInt32 frames)
+        {
+            const uint64_t gen = s->generation.load(std::memory_order_relaxed);
+            const bool jumped = gen == generation && t != end && t != start;
+            if (gen != generation || t != start) {
+                generation = gen;
+                start = t;
+                end = t + frames;
+            }
+            return jumped;
+        }
+    };
+
     static void CopyFromRing(const float* ring, uint64_t t, float* out, UInt32 frames)
     {
         const uint32_t start = static_cast<uint32_t>(t % FTU_RING_FRAMES);
@@ -472,6 +509,8 @@ private:
 
     std::shared_ptr<DaemonLink> link_;
     std::shared_ptr<RateState> rate_;
+    Timeline in_;
+    Timeline out_;
 };
 
 std::shared_ptr<aspl::Driver> CreateDriver()

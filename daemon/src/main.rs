@@ -303,21 +303,50 @@ fn run_service() -> Result<(), Box<dyn std::error::Error>> {
                 // On S/PDIF clock: when the device started reporting another rate.
                 let mut rate_mismatch_since: Option<Instant> = None;
                 let mut last_report = Instant::now();
-                let mut reported = (0u64, 0u64);
+                let mut reported = [0u64; 15];
                 while !stream.failed() {
-                    // Log underruns and USB errors when they change, at most every 10 s.
-                    if last_report.elapsed() >= Duration::from_secs(10) {
+                    // Log the error counters when any changes, at most once a second, with
+                    // the wall-clock time so events can be matched with a client's log.
+                    if last_report.elapsed() >= Duration::from_secs(1) {
                         last_report = Instant::now();
                         let s = stream.shm();
-                        let now = (s.play_underruns.load(Ordering::Relaxed), s.usb_errors.load(Ordering::Relaxed));
-                        let plugin = (s.plugin_late_writes.load(Ordering::Relaxed), s.plugin_short_reads.load(Ordering::Relaxed));
+                        let now = [
+                            &s.play_underruns,
+                            &s.usb_errors,
+                            &s.plugin_late_writes,
+                            &s.plugin_short_reads,
+                            &s.plugin_input_jumps,
+                            &s.plugin_output_jumps,
+                            &s.lead_frames_added,
+                            &s.lead_frames_dropped,
+                            &s.lead_jumps,
+                            &s.fallback_packets,
+                            &s.capture_errors,
+                            &s.playback_errors,
+                            &s.fifo_overflows,
+                            &s.callback_stalls,
+                            &s.max_callback_gap_us,
+                        ]
+                        .map(|c| c.load(Ordering::Relaxed));
                         if now != reported {
                             eprintln!(
-                                "ftu-daemon: playback underruns {}, usb errors {}, plugin late writes {}, short reads {}, lead {} frames",
-                                now.0,
-                                now.1,
-                                plugin.0,
-                                plugin.1,
+                                "ftu-daemon: {} playback underruns {}, usb errors {}, plugin late writes {}, short reads {}, input jumps {}, output jumps {}, lead frames added {}, dropped {}, lead jumps {}, fallback packets {}, capture errors {}, playback errors {}, fifo overflows {}, stalls {}, max gap {} us, lead {} frames",
+                                wall_clock(),
+                                now[0],
+                                now[1],
+                                now[2],
+                                now[3],
+                                now[4],
+                                now[5],
+                                now[6],
+                                now[7],
+                                now[8],
+                                now[9],
+                                now[10],
+                                now[11],
+                                now[12],
+                                now[13],
+                                now[14],
                                 s.play_read_pos.load(Ordering::Relaxed) as i64 - s.cap_write_pos.load(Ordering::Relaxed) as i64
                             );
                             reported = now;
@@ -379,6 +408,19 @@ fn run_service() -> Result<(), Box<dyn std::error::Error>> {
         drop(dev);
         std::thread::sleep(Duration::from_secs(1));
     }
+}
+
+/// Local time as HH:MM:SS.mmm, for log lines.
+fn wall_clock() -> String {
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
+    let secs = now.as_secs() as libc::time_t;
+    // SAFETY: localtime_r writes into the tm we own.
+    let tm = unsafe {
+        let mut tm = std::mem::zeroed::<libc::tm>();
+        libc::localtime_r(&secs, &mut tm);
+        tm
+    };
+    format!("{:02}:{:02}:{:02}.{:03}", tm.tm_hour, tm.tm_min, tm.tm_sec, now.subsec_millis())
 }
 
 /// Rate from the device status word. The meter read returns the previous snapshot, so
