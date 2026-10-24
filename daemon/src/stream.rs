@@ -298,6 +298,30 @@ pub struct Stream {
     last_stats: Stats,
 }
 
+/// Cleans up after a failed initial submit. Transfers already submitted still point at
+/// `engine` and their buffers, so cancel them and wait until libusb hands them back
+/// before freeing anything. `stopping` must be set so callbacks do not resubmit.
+unsafe fn abort_start(ctx: *mut ffi::libusb_context, inflight: &AtomicUsize, xfers: Transfers, engine: Box<Engine>) {
+    for (t, _) in &xfers.0 {
+        ffi::libusb_cancel_transfer(*t);
+    }
+    let tv = libc::timeval { tv_sec: 0, tv_usec: 50_000 };
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while inflight.load(Ordering::Acquire) > 0 && Instant::now() < deadline {
+        ffi::libusb_handle_events_timeout_completed(ctx, &tv, std::ptr::null_mut());
+    }
+    if inflight.load(Ordering::Acquire) > 0 {
+        // Still owned by libusb: leaking is safer than freeing memory it may write.
+        eprintln!("warning: {} transfers did not return after a failed start; leaking them", inflight.load(Ordering::Acquire));
+        std::mem::forget(xfers);
+        std::mem::forget(engine);
+        return;
+    }
+    for (t, _buf) in xfers.0 {
+        ffi::libusb_free_transfer(t);
+    }
+}
+
 impl Stream {
     /// Claims the streaming interfaces, sets the rate and starts both directions.
     pub fn start(dev: &mut Device, shm: Arc<ShmRegion>, cfg: StreamConfig) -> Result<Self, UsbError> {
@@ -373,6 +397,9 @@ impl Stream {
                     let r = ffi::libusb_submit_transfer(t);
                     if r < 0 {
                         stopping.store(true, Ordering::Release);
+                        ffi::libusb_free_transfer(t);
+                        abort_start(ctx as *mut ffi::libusb_context, &inflight, xfers, engine);
+                        dev.release_streaming();
                         return Err(UsbError { op: "initial submit", code: r });
                     }
                     inflight.fetch_add(1, Ordering::AcqRel);
