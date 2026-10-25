@@ -15,7 +15,7 @@ Streaming, the XPC service and mixer control work end to end with the HAL plugin
 | Device clock | `src/pacing.rs` (`Clock`), published by `src/stream.rs` | Second-order DLL, 0.5 Hz bandwidth. Estimate stays within about ±10 Hz of 48 kHz, 1 s readings |
 | XPC service | `src/xpc_shim.c` | Hands the shared memory to `coreaudiod`'s user and the owner. Rate requests, mixer control |
 | Mixer state | `src/mixer.rs` | Matrix with pan, link, mute and solo; effect; returns; output gain. Vendor pan and balance laws |
-| Control service | `src/ctl.rs` | JSON requests over XPC, persistence, writes changes to the device, meter polling |
+| Control service | `src/ctl/` | `api.rs` JSON requests over XPC, `store.rs` saved settings, `sync.rs` writes changes to the device and polls meters |
 | Service loop | `src/supervisor.rs` | Device open and reopen, stream restarts on rate, clock and failure (`Watch`, `after_stop`), counter log |
 | Test harness | `src/harness.rs` (`test`) | Stands in for the plugin: tone into the playback ring, capture ring to WAV |
 

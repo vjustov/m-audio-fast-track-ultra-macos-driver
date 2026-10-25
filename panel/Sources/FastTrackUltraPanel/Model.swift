@@ -1,4 +1,4 @@
-// Mirrors the daemon's JSON (daemon/src/mixer.rs and ctl.rs) and keeps the panel in
+// Mirrors the daemon's JSON (daemon/src/mixer.rs and ctl/api.rs) and keeps the panel in
 // sync with it. Edits update the local copy at once and reach the daemon in batches.
 
 import AppKit

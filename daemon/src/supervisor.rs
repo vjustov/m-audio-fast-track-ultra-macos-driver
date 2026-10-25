@@ -4,12 +4,11 @@
 //! The decisions (when a running stream must stop, and what the next start uses) live
 //! in `Watch` and `after_stop`, free of I/O, so they can be tested.
 
-use crate::ctl::{self, Control};
+use crate::ctl::{self, Control, DeviceSync, Store};
 use crate::shm::{Shm, ShmRegion};
 use crate::stream::{Stream, StreamConfig};
 use crate::usb::{ClockSource, Device};
 use crate::{wall_clock, SERVICE_NAME};
-use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -22,7 +21,7 @@ const SPDIF_FOLLOW_DELAY: Duration = Duration::from_millis(500);
 const SERVICE_PERIOD: Duration = Duration::from_millis(50);
 
 extern "C" {
-    fn ftu_xpc_listen(name: *const libc::c_char, addr: *mut libc::c_void, len: usize) -> libc::c_int;
+    fn ftu_xpc_listen(name: *const libc::c_char, addr: *mut libc::c_void, len: usize, ctl: *const libc::c_void) -> libc::c_int;
     fn ftu_xpc_take_requested_rate() -> u32;
 }
 
@@ -96,21 +95,22 @@ pub fn after_stop(stop: Stop, rate: u32, streaming_rate: u32) -> (u32, bool) {
 /// Runs forever: holds the shared memory, serves XPC, and keeps the device streaming.
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let shm = Arc::new(ShmRegion::new()?);
-    let control = Control::init();
+    // Shared with the XPC handlers for the life of the process.
+    let control: &'static Control = Box::leak(Box::new(Control::new(Store::user())));
     let name = std::ffi::CString::new(SERVICE_NAME)?;
-    // SAFETY: the region lives until process exit (shm is never dropped in this loop).
-    if unsafe { ftu_xpc_listen(name.as_ptr(), shm.as_ptr() as *mut libc::c_void, shm.len()) } != 0 {
+    let ctx = control as *const Control as *const libc::c_void;
+    // SAFETY: the region and the control live until process exit.
+    if unsafe { ftu_xpc_listen(name.as_ptr(), shm.as_ptr() as *mut libc::c_void, shm.len(), ctx) } != 0 {
         return Err("XPC listener failed (is the service registered with launchd?)".into());
     }
     eprintln!("ftu-daemon: serving {SERVICE_NAME}, shared memory {} bytes", shm.len());
 
     let mut rate = DEFAULT_RATE;
-    // Controls already on the device. Cleared whenever the device may have reset.
-    let mut sent = HashMap::new();
+    let mut sync = DeviceSync::default();
     loop {
         let Ok(mut dev) = Device::open() else {
             control.device_lost();
-            sent.clear();
+            sync.clear();
             // Keep honouring rate requests while the device is away.
             // SAFETY: plain C function, no arguments.
             let r = unsafe { ftu_xpc_take_requested_rate() };
@@ -122,7 +122,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         };
         control.device_opened(&dev);
         // Restore the mixer before audio starts.
-        control.service(&dev, &mut sent, Duration::ZERO);
+        sync.service(control, &dev, Duration::ZERO);
         control.take_clock_change();
         let clock = if dev.link_speed() == "USB 2.0" { control.clock() } else { ClockSource::Internal };
         let mut cfg = StreamConfig { sample_rate: rate, clock };
@@ -138,7 +138,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             Ok(s) => s,
             Err(e) => {
                 eprintln!("ftu-daemon: start failed: {e}");
-                sent.clear();
+                sync.clear();
                 drop(dev);
                 std::thread::sleep(Duration::from_secs(1));
                 continue;
@@ -162,7 +162,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             if let Some(stop) = watch.check(stream.failed(), requested, control.take_clock_change(), status_rate, Instant::now()) {
                 break stop;
             }
-            control.service(&dev, &mut sent, SERVICE_PERIOD);
+            sync.service(control, &dev, SERVICE_PERIOD);
         };
 
         control.set_streaming(None, None);
@@ -175,7 +175,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         let clear;
         (rate, clear) = after_stop(stop, rate, streaming_rate);
         if clear {
-            sent.clear();
+            sync.clear();
         }
         // Restart right away. The handle is dropped and the device reopened, which also
         // notices a replug.

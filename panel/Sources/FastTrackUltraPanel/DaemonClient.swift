@@ -1,5 +1,5 @@
 // XPC client for ftu-daemon's "ctl" op. Requests and replies are JSON strings;
-// see daemon/src/ctl.rs for the request set.
+// see daemon/src/ctl/api.rs for the request set.
 
 import Foundation
 import XPC
