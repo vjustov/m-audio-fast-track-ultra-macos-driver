@@ -212,7 +212,7 @@ mod tests {
         let (c, d) = control("contract");
         // A state with every kind of value, not only defaults (null levels, zero pans).
         let set = r#"{"set": [["bus1.in1.level", "-6"], ["bus1.in1.pan", "0.25"], ["bus2.daw3.mute", "on"], ["link.in1", "on"],
-            ["fx.program", "delay"], ["fx.send.in2", "-10"], ["fx.return.1", "-3"], ["fx.bypass.2", "on"], ["out1.level", "-1.5"]]}"#;
+            ["fx.program", "plate"], ["fx.feedback", "0.25"], ["fx.program", "delay"], ["fx.send.in2", "-10"], ["fx.return.1", "-3"], ["fx.bypass.2", "on"], ["out1.level", "-1.5"]]}"#;
         assert_eq!(c.handle(set), json!({ "ok": true }));
         {
             let mut st = c.status.lock().unwrap();
@@ -245,7 +245,10 @@ mod tests {
                 continue;
             }
             let want = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e} (run with UPDATE_FIXTURES=1)", path.display()));
-            assert_eq!(text, want, "{name} changed: update the fixture and the panel (see the comment above)");
+            if text != want {
+                let (n, (got, exp)) = text.lines().zip(want.lines()).enumerate().find(|(_, (a, b))| a != b).unwrap_or((0, ("(length differs)", "")));
+                panic!("{name} changed at line {}: {got:?}, fixture has {exp:?}. Update the fixture and the panel (see the comment above)", n + 1);
+            }
         }
         let _ = std::fs::remove_dir_all(&d);
     }

@@ -38,6 +38,8 @@ final class ContractTests: XCTestCase {
         XCTAssertEqual(state.buses[0][0].pan, 0.25)
         XCTAssertEqual(state.fx.program, 6)
         XCTAssertEqual(state.fx.bypass, [false, true])
+        XCTAssertEqual(state.fx.programs?.count, 8)
+        XCTAssertEqual(state.fx.programs?[5].feedback, 0.25, "plate keeps the feedback set before switching to delay")
         XCTAssertEqual(state.outputs[0].level, -1.5)
         let again = try JSONEncoder().encode(state)
         XCTAssertEqual(try normalized(again), try normalized(data), "the panel would drop or change fields on put")

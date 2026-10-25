@@ -90,7 +90,7 @@ Only sends from buses 1/2 and 3/4 reach the DSP. The manual gives no parameter r
 | E9 | Parameter: Duration | p.13 | ✓ L5 | ✓ D | ✓ by ear | ✓ |
 | E10 | Parameter: Feedback | p.13 | ✓ L5 | ✓ D | ✓ by ear | ✓ |
 | E11 | Parameter: Volume | p.13 | ✓ L5 | ✓ D | ✓ | ✓ |
-| E12 | Duration, feedback and volume remembered per program, restored on program change (not in manual) | n/a | | ✓ D (`LEffectSettings` per program) | | |
+| E12 | Duration, feedback and volume remembered per program, restored on program change (not in manual) | n/a | | ✓ D (`LEffectSettings` per program) | | ✓ daemon, panel (unit tests) |
 
 ## Metering
 

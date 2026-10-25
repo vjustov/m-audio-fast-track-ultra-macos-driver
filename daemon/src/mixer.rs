@@ -42,13 +42,33 @@ impl Default for Send {
     }
 }
 
+/// Effect settings one program remembers. The vendor daemon keeps one set per program
+/// (`LEffectSettings`) and restores it when the program changes (docs/protocol.md).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct FxSettings {
+    pub volume: f64,
+    pub duration: f64,
+    pub feedback: f64,
+}
+
+impl Default for FxSettings {
+    fn default() -> Self {
+        FxSettings { volume: 1.0, duration: 0.5, feedback: 0.5 }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Fx {
     pub program: u8,
+    /// The current program's settings, the ones on the device.
     pub volume: f64,
     pub duration: f64,
     pub feedback: f64,
+    /// Settings per program, restored on a program change. `programs[program]` always
+    /// equals the current settings above.
+    pub programs: Vec<FxSettings>,
     pub sends: Vec<Option<f64>>,
     pub returns: Vec<Option<f64>>,
     /// Per bus 1/2 and 3/4: silence the effect return on that bus. The firmware has no
@@ -58,15 +78,38 @@ pub struct Fx {
 
 impl Default for Fx {
     fn default() -> Self {
+        let d = FxSettings::default();
         Fx {
             program: 3, // hall1
-            volume: 1.0,
-            duration: 0.5,
-            feedback: 0.5,
+            volume: d.volume,
+            duration: d.duration,
+            feedback: d.feedback,
+            programs: vec![d; PROGRAMS.len()],
             sends: vec![None; SOURCES],
             returns: vec![Some(0.0); RETURNS],
             bypass: vec![false; RETURNS / 2],
         }
+    }
+}
+
+impl Fx {
+    fn current(&self) -> FxSettings {
+        FxSettings { volume: self.volume, duration: self.duration, feedback: self.feedback }
+    }
+
+    /// Stores the current settings as the current program's.
+    fn remember(&mut self) {
+        self.programs[self.program as usize] = self.current();
+    }
+
+    /// Switches program, restoring the settings it had.
+    fn select(&mut self, program: u8) {
+        self.remember();
+        self.program = program;
+        let s = self.programs[program as usize];
+        self.volume = s.volume;
+        self.duration = s.duration;
+        self.feedback = s.feedback;
     }
 }
 
@@ -209,6 +252,10 @@ impl Mixer {
         if self.fx.program as usize >= PROGRAMS.len() {
             self.fx.program = d.fx.program;
         }
+        // A file from before per-program settings has none: every program starts from
+        // the defaults, and the current settings win for the current program.
+        self.fx.programs.resize(PROGRAMS.len(), FxSettings::default());
+        self.fx.remember();
     }
 
     /// Linear gains from source `s` into the left and right output of bus `b`.
@@ -295,14 +342,24 @@ impl Mixer {
             }
             ["link", src] => self.link[source(src)? / 2] = boolean(value)?,
             ["fx", "program"] => {
-                self.fx.program = match PROGRAMS.iter().position(|p| *p == value) {
+                let p = match PROGRAMS.iter().position(|p| *p == value) {
                     Some(i) => i as u8,
                     None => number(value, 0.0, 7.0)? as u8,
-                }
+                };
+                self.fx.select(p);
             }
-            ["fx", "volume"] => self.fx.volume = number(value, 0.0, 1.0)?,
-            ["fx", "duration"] => self.fx.duration = number(value, 0.0, 1.0)?,
-            ["fx", "feedback"] => self.fx.feedback = number(value, 0.0, 1.0)?,
+            ["fx", "volume"] => {
+                self.fx.volume = number(value, 0.0, 1.0)?;
+                self.fx.remember();
+            }
+            ["fx", "duration"] => {
+                self.fx.duration = number(value, 0.0, 1.0)?;
+                self.fx.remember();
+            }
+            ["fx", "feedback"] => {
+                self.fx.feedback = number(value, 0.0, 1.0)?;
+                self.fx.remember();
+            }
             ["fx", "send", src] => self.fx.sends[source(src)?] = db(value)?,
             ["fx", "return", o] => {
                 let o = index(o, RETURNS).ok_or_else(|| format!("bad return '{o}', use 1..4"))?;
@@ -430,5 +487,35 @@ mod tests {
         m.set("bus2.in3.pan", "0.25").unwrap();
         let back: Mixer = serde_json::from_str(&serde_json::to_string(&m).unwrap()).unwrap();
         assert_eq!(back, m);
+    }
+
+    #[test]
+    fn each_program_keeps_its_own_settings() {
+        let mut m = Mixer::default();
+        m.set("fx.program", "delay").unwrap();
+        m.set("fx.duration", "0.8").unwrap();
+        m.set("fx.feedback", "0.2").unwrap();
+        m.set("fx.program", "plate").unwrap();
+        // A program not used yet starts from the defaults.
+        assert_eq!((m.fx.volume, m.fx.duration, m.fx.feedback), (1.0, 0.5, 0.5));
+        m.set("fx.volume", "0.4").unwrap();
+        m.set("fx.program", "delay").unwrap();
+        assert_eq!((m.fx.volume, m.fx.duration, m.fx.feedback), (1.0, 0.8, 0.2));
+        // The device gets the restored settings.
+        assert_eq!(word(&m, 6, 3, 0), (0.8f64 * 32512.0).round() as i16);
+        m.set("fx.program", "plate").unwrap();
+        assert_eq!(m.fx.volume, 0.4);
+    }
+
+    #[test]
+    fn a_file_without_per_program_settings_keeps_its_current_ones() {
+        let mut m: Mixer = serde_json::from_str(r#"{"fx": {"program": 6, "volume": 0.3, "duration": 0.9, "feedback": 0.1}}"#).unwrap();
+        m.normalize();
+        assert_eq!(m.fx.programs.len(), PROGRAMS.len());
+        assert_eq!(m.fx.programs[6], FxSettings { volume: 0.3, duration: 0.9, feedback: 0.1 });
+        assert_eq!(m.fx.programs[0], FxSettings::default());
+        m.set("fx.program", "room1").unwrap();
+        m.set("fx.program", "delay").unwrap();
+        assert_eq!((m.fx.volume, m.fx.duration, m.fx.feedback), (0.3, 0.9, 0.1));
     }
 }
