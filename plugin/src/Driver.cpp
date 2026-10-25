@@ -52,6 +52,32 @@ UInt32 SafetyOffsetFor(UInt32 rate)
     return rate * 24 / 1000;
 }
 
+// Device latency per direction, in frames, beyond the safety offset: the round trip
+// measured through Core Audio with hwtest/latency on 2026-10-25 (clean starts, before
+// the 10 ms playback start delay), split between input and output. For comparison the
+// vendor kext reports 28 + 28 at 44.1 and 48 kHz, 43 + 43 at 88.2 and 45 + 45 at 96.
+// Provisional: re-measure with the current daemon; "unreported" should read about 0.
+UInt32 LatencyFor(UInt32 rate, aspl::Direction dir)
+{
+    UInt32 roundTrip;
+    switch (rate) {
+    case 44100:
+        roundTrip = 62;
+        break;
+    case 88200:
+        roundTrip = 86;
+        break;
+    case 96000:
+        roundTrip = 91;
+        break;
+    default:
+        roundTrip = 63;
+        break;
+    }
+    const UInt32 input = roundTrip / 2;
+    return dir == aspl::Direction::Input ? input : roundTrip - input;
+}
+
 bool ValidRate(Float64 rate)
 {
     for (UInt32 r : kRates) {
@@ -349,6 +375,11 @@ public:
     {
     }
 
+    UInt32 GetLatency() const override
+    {
+        return LatencyFor(rate_->rate.load(), GetDirection());
+    }
+
     AudioStreamBasicDescription GetPhysicalFormat() const override
     {
         return FloatFormat(rate_->rate.load());
@@ -450,7 +481,7 @@ protected:
         // driver host, so `this` stays valid.
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
             for (auto& s : streams_) {
-                s->NotifyPropertiesChanged({kAudioStreamPropertyPhysicalFormat, kAudioStreamPropertyVirtualFormat});
+                s->NotifyPropertiesChanged({kAudioStreamPropertyPhysicalFormat, kAudioStreamPropertyVirtualFormat, kAudioStreamPropertyLatency});
             }
             NotifyPropertyChanged(kAudioDevicePropertySafetyOffset, kAudioObjectPropertyScopeInput);
             NotifyPropertyChanged(kAudioDevicePropertySafetyOffset, kAudioObjectPropertyScopeOutput);

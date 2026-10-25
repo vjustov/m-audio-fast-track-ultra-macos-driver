@@ -3,7 +3,7 @@
 
 use crate::rt;
 use crate::shm::{ShmRegion, CHANNELS, RING_FRAMES};
-use crate::stream::{Stream, StreamConfig};
+use crate::stream::{Stream, StreamConfig, PLAYBACK_DELAY};
 use crate::usage;
 use crate::usb::{ClockSource, Device};
 use std::io::{Seek, SeekFrom, Write};
@@ -112,11 +112,11 @@ pub fn run_test(a: Args) -> Result<(), Box<dyn std::error::Error>> {
     let shm = Arc::new(ShmRegion::new()?);
     let mut dev = Device::open()?;
     if a.switch {
-        let first = Stream::start(&mut dev, shm.clone(), StreamConfig { sample_rate: a.rate, clock: ClockSource::Internal })?;
+        let first = Stream::start(&mut dev, shm.clone(), StreamConfig { sample_rate: a.rate, clock: ClockSource::Internal, playback_delay: PLAYBACK_DELAY })?;
         std::thread::sleep(Duration::from_secs(5));
         println!("switch: internal stream stopped ({:?})", first.stop(&mut dev));
     }
-    let stream = Stream::start(&mut dev, shm.clone(), StreamConfig { sample_rate: a.rate, clock: a.clock })?;
+    let stream = Stream::start(&mut dev, shm.clone(), StreamConfig { sample_rate: a.rate, clock: a.clock, playback_delay: PLAYBACK_DELAY })?;
     let s = stream.shm();
     let rate = s.sample_rate.load(Ordering::Acquire);
     println!("streaming at {rate} Hz, clock {:?}, shared memory {} bytes", a.clock, shm.len());

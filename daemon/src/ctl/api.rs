@@ -5,6 +5,7 @@
 //!   {"get": "status"}                      -> connection, port, streaming, rate, clock, power, firmware
 //!   {"clock": "internal" | "spdif"}        -> {"ok": true}; the stream restarts on the new clock
 //!   {"stall_ms": n}                        -> {"ok": true}; test hook, stalls the USB event thread once
+//!   {"playback_delay_ms": n}               -> {"ok": true}; test hook, playback start delay from the next start
 //!   {"put": {state}}                       -> replaces the whole state (settings file restore)
 //!   {"set": [["bus1.in1.level", "-6"], ..]} -> {"ok": true} or {"error": ".."}; all or nothing
 //!   {"reset": true}                        -> defaults
@@ -66,6 +67,10 @@ impl Control {
         }
         if let Some(ms) = req.get("stall_ms").and_then(Value::as_u64) {
             self.stall_ms.store(ms.min(1000) as u32, Ordering::Release);
+            return json!({ "ok": true });
+        }
+        if let Some(ms) = req.get("playback_delay_ms").and_then(Value::as_u64) {
+            self.playback_delay_ms.store(ms.min(20) as u32, Ordering::Release);
             return json!({ "ok": true });
         }
         if req.get("reset").and_then(Value::as_bool) == Some(true) {

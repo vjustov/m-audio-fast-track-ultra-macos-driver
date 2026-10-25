@@ -262,7 +262,7 @@ pub fn serve<B: Backend>(control: &Control, b: &mut B) {
         sync.service(control, &dev, Duration::ZERO);
         control.take_clock_change();
         let clock = if dev.link_speed() == "USB 2.0" { control.clock() } else { ClockSource::Internal };
-        let mut cfg = StreamConfig { sample_rate: rate, clock };
+        let mut cfg = StreamConfig { sample_rate: rate, clock, playback_delay: control.playback_delay() };
         if clock == ClockSource::Spdif {
             // Select alternate setting 2 first, so the status word reports the S/PDIF rate.
             if let Err(e) = dev.claim_streaming(clock) {

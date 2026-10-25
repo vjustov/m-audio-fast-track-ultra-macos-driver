@@ -65,6 +65,8 @@ pub struct Control {
     clock: Mutex<ClockSource>,
     clock_changed: AtomicBool,
     stall_ms: AtomicU32,
+    /// Test hook for comparing stream starts; not saved.
+    playback_delay_ms: AtomicU32,
 }
 
 impl Control {
@@ -80,6 +82,7 @@ impl Control {
             status: Mutex::new(Status::default()),
             clock_changed: AtomicBool::new(false),
             stall_ms: AtomicU32::new(0),
+            playback_delay_ms: AtomicU32::new(crate::stream::PLAYBACK_DELAY.as_millis() as u32),
         }
     }
 
@@ -96,6 +99,11 @@ impl Control {
     /// Stall requested by the test hook, once.
     pub fn take_stall(&self) -> u32 {
         self.stall_ms.swap(0, Ordering::AcqRel)
+    }
+
+    /// Playback start delay for the next stream start.
+    pub fn playback_delay(&self) -> std::time::Duration {
+        std::time::Duration::from_millis(self.playback_delay_ms.load(Ordering::Acquire) as u64)
     }
 
     /// Latest device status word, from the meter poll.
