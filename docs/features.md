@@ -71,7 +71,7 @@ Rows marked "host?" may be computed in the control panel and sent as raw matrix 
 | X8 | Buses 1/2 and 3/4 only: DSP bypass | p.11 | | ✓ D (host: unit 7 return off, no device request) | | ✓ daemon (zeroes the return) |
 | X9 | Mixer is independent of the recording path | p.10 | | | | |
 | X10 | Effect return level into outputs 1 to 4 (not in manual) | n/a | ✓ L3 | ✓ D (ctl 2) | ✓ by ear: ctl 2 (or 7) ch 1-4 = out 1-4, ctl 1 = mute. Not in meters | ✓ daemon |
-| X11 | FX sends mode: pre-fader or post-fader (Mix 1/2) (panel 2.3.3, not in manual) | n/a | | ? P (setting), D (`LFXSends8` 9th parameter); scaling not found | | |
+| X11 | FX sends mode: pre-fader or post-fader (Mix 1/2) (panel 2.3.3, not in manual) | n/a | | ✓ D, P: no effect on USB traffic (same send values, only resent after Mix 1/2) | | ✓ daemon, panel: our extension, off by default (unit tests) |
 
 ## DSP effects
 
