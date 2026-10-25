@@ -12,11 +12,20 @@ struct Send: Codable, Equatable {
     var solo: Bool
 }
 
+/// Settings one effect program remembers (daemon: mixer.rs FxSettings).
+struct FxSettings: Codable, Equatable {
+    var volume: Double
+    var duration: Double
+    var feedback: Double
+}
+
 struct Fx: Codable, Equatable {
     var program: Int
     var volume: Double
     var duration: Double
     var feedback: Double
+    /// Per program, restored on a program change. Optional: older daemons lack it.
+    var programs: [FxSettings]?
     var sends: [Double?]
     var returns: [Double?]
     var bypass: [Bool]
@@ -270,6 +279,15 @@ final class Store: ObservableObject {
     }
 
     func setProgram(_ i: Int) {
+        // Mirror the daemon at once: keep the old program's settings, restore the new one's.
+        if var fx = state?.fx, var p = fx.programs, p.indices.contains(fx.program), p.indices.contains(i) {
+            p[fx.program] = FxSettings(volume: fx.volume, duration: fx.duration, feedback: fx.feedback)
+            fx.volume = p[i].volume
+            fx.duration = p[i].duration
+            fx.feedback = p[i].feedback
+            fx.programs = p
+            state?.fx = fx
+        }
         state?.fx.program = i
         send("fx.program", String(i))
     }

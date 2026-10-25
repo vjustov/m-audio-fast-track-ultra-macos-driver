@@ -401,6 +401,48 @@
     "duration": 0.5,
     "feedback": 0.5,
     "program": 6,
+    "programs": [
+      {
+        "duration": 0.5,
+        "feedback": 0.5,
+        "volume": 1.0
+      },
+      {
+        "duration": 0.5,
+        "feedback": 0.5,
+        "volume": 1.0
+      },
+      {
+        "duration": 0.5,
+        "feedback": 0.5,
+        "volume": 1.0
+      },
+      {
+        "duration": 0.5,
+        "feedback": 0.5,
+        "volume": 1.0
+      },
+      {
+        "duration": 0.5,
+        "feedback": 0.5,
+        "volume": 1.0
+      },
+      {
+        "duration": 0.5,
+        "feedback": 0.25,
+        "volume": 1.0
+      },
+      {
+        "duration": 0.5,
+        "feedback": 0.5,
+        "volume": 1.0
+      },
+      {
+        "duration": 0.5,
+        "feedback": 0.5,
+        "volume": 1.0
+      }
+    ],
     "returns": [
       -3.0,
       0.0,
