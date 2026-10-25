@@ -1,0 +1,180 @@
+=== 44100 Hz, 20:23:10
+rate 44100 Hz, buffer 512 frames
+reported: input latency 0 + stream 31, safety 1058; output latency 0 + stream 31, safety 1058
+burst  1:    62.94 frames (1.427 ms), gain +0.04
+round trip 62.94 frames (1.427 ms), spread 0.00; reported latency sum 62; unreported 0.94 frames (0.021 ms)
+soak: 30.0 min, 997 Hz at -20.0 dBFS, output 1 -> input 1, 44100.0 Hz
+  engine reconfigured at 0.1 s, restarting
+t=    1 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 44098.2 Hz
+t=    2 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 44099.8 Hz
+t=    3 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 44099.6 Hz
+  glitch at 198.826 s (20:26:32.914): blip, phase jump -0.1 samples
+t=    4 min  input  -50.4 dBFS  glitches 1 (total 1)  overloads 0  restarts 1  rate 44100.5 Hz
+t=    5 min  input  -50.4 dBFS  glitches 0 (total 1)  overloads 0  restarts 1  rate 44100.5 Hz
+t=    6 min  input  -50.4 dBFS  glitches 0 (total 1)  overloads 0  restarts 1  rate 44099.7 Hz
+t=    7 min  input  -50.4 dBFS  glitches 0 (total 1)  overloads 0  restarts 1  rate 44094.4 Hz
+t=    8 min  input  -50.4 dBFS  glitches 0 (total 1)  overloads 0  restarts 1  rate 44099.7 Hz
+t=    9 min  input  -50.4 dBFS  glitches 0 (total 1)  overloads 0  restarts 1  rate 44100.1 Hz
+  glitch at 592.850 s (20:33:06.938): blip, phase jump +0.2 samples
+t=   10 min  input  -50.4 dBFS  glitches 1 (total 2)  overloads 0  restarts 1  rate 44100.5 Hz
+t=   11 min  input  -50.4 dBFS  glitches 0 (total 2)  overloads 0  restarts 1  rate 44100.1 Hz
+  glitch at 680.453 s (20:34:34.541): blip, phase jump -0.1 samples
+t=   12 min  input  -50.4 dBFS  glitches 1 (total 3)  overloads 0  restarts 1  rate 44099.7 Hz
+t=   13 min  input  -50.4 dBFS  glitches 0 (total 3)  overloads 0  restarts 1  rate 44100.1 Hz
+t=   14 min  input  -50.4 dBFS  glitches 0 (total 3)  overloads 0  restarts 1  rate 44100.1 Hz
+t=   15 min  input  -50.4 dBFS  glitches 0 (total 3)  overloads 0  restarts 1  rate 44111.3 Hz
+t=   16 min  input  -50.4 dBFS  glitches 0 (total 3)  overloads 0  restarts 1  rate 44101.9 Hz
+t=   17 min  input  -50.4 dBFS  glitches 0 (total 3)  overloads 0  restarts 1  rate 44100.8 Hz
+t=   18 min  input  -50.4 dBFS  glitches 0 (total 3)  overloads 0  restarts 1  rate 44100.0 Hz
+t=   19 min  input  -50.4 dBFS  glitches 0 (total 3)  overloads 0  restarts 1  rate 44100.3 Hz
+t=   20 min  input  -50.4 dBFS  glitches 0 (total 3)  overloads 0  restarts 1  rate 44098.4 Hz
+  glitch at 1248.294 s (20:44:02.382): blip, phase jump -0.0 samples
+  glitch at 1248.481 s (20:44:02.569): blip, phase jump +0.1 samples
+t=   21 min  input  -50.4 dBFS  glitches 2 (total 5)  overloads 0  restarts 1  rate 44102.4 Hz
+t=   22 min  input  -50.4 dBFS  glitches 0 (total 5)  overloads 0  restarts 1  rate 44100.7 Hz
+t=   23 min  input  -50.4 dBFS  glitches 0 (total 5)  overloads 0  restarts 1  rate 44103.0 Hz
+t=   24 min  input  -50.4 dBFS  glitches 0 (total 5)  overloads 0  restarts 1  rate 44100.4 Hz
+t=   25 min  input  -50.4 dBFS  glitches 0 (total 5)  overloads 0  restarts 1  rate 44100.7 Hz
+t=   26 min  input  -50.4 dBFS  glitches 0 (total 5)  overloads 0  restarts 1  rate 44100.2 Hz
+t=   27 min  input  -50.4 dBFS  glitches 0 (total 5)  overloads 0  restarts 1  rate 44097.5 Hz
+t=   28 min  input  -50.4 dBFS  glitches 0 (total 5)  overloads 0  restarts 1  rate 44100.3 Hz
+t=   29 min  input  -50.4 dBFS  glitches 0 (total 5)  overloads 0  restarts 1  rate 44100.3 Hz
+  glitch at 1761.572 s (20:52:35.661): blip, phase jump +0.2 samples
+t=   30 min  input  -50.4 dBFS  glitches 1 (total 6)  overloads 0  restarts 1  rate 44100.4 Hz
+done: 6 glitches, 0 overloads in 30 min
+ftu-daemon: 20:23:13.934 playback underruns 1, usb errors 0, plugin late writes 0, short reads 0, input jumps 0, output jumps 0, lead frames added 0, dropped 0, lead jumps 2, fallback packets 256, capture errors 0, playback errors 0, fifo overflows 0, stalls 0
+=== 88200 Hz, 20:53:14
+rate 88200 Hz, buffer 512 frames
+reported: input latency 0 + stream 43, safety 2116; output latency 0 + stream 43, safety 2116
+burst  1:    85.78 frames (0.973 ms), gain +0.04
+round trip 85.78 frames (0.973 ms), spread 0.00; reported latency sum 86; unreported -0.22 frames (-0.002 ms)
+soak: 30.0 min, 997 Hz at -20.0 dBFS, output 1 -> input 1, 88200.0 Hz
+  engine reconfigured at 0.1 s, restarting
+t=    1 min  input  -50.6 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 88047.2 Hz
+  glitch at 61.400 s (20:54:19.971): blip, phase jump -0.4 samples
+  glitch at 61.418 s (20:54:19.989): blip, phase jump -0.0 samples
+  glitch at 61.486 s (20:54:20.057): phase jump, phase jump +0.5 samples
+  glitch at 63.611 s (20:54:22.182): phase jump, phase jump +0.6 samples
+t=    2 min  input  -50.6 dBFS  glitches 4 (total 4)  overloads 0  restarts 1  rate 88200.8 Hz
+t=    3 min  input  -50.6 dBFS  glitches 0 (total 4)  overloads 0  restarts 1  rate 88199.9 Hz
+  glitch at 184.075 s (20:56:22.646): phase jump, phase jump -0.9 samples
+t=    4 min  input  -50.6 dBFS  glitches 1 (total 5)  overloads 0  restarts 1  rate 88200.7 Hz
+t=    5 min  input  -50.6 dBFS  glitches 0 (total 5)  overloads 0  restarts 1  rate 88200.0 Hz
+t=    6 min  input  -50.6 dBFS  glitches 0 (total 5)  overloads 0  restarts 1  rate 88348.4 Hz
+t=    7 min  input  -50.6 dBFS  glitches 0 (total 5)  overloads 0  restarts 1  rate 88201.4 Hz
+t=    8 min  input  -50.6 dBFS  glitches 0 (total 5)  overloads 0  restarts 1  rate 88200.6 Hz
+t=    9 min  input  -50.6 dBFS  glitches 0 (total 5)  overloads 0  restarts 1  rate 88200.0 Hz
+t=   10 min  input  -50.6 dBFS  glitches 0 (total 5)  overloads 0  restarts 1  rate 88200.7 Hz
+t=   11 min  input  -50.6 dBFS  glitches 0 (total 5)  overloads 0  restarts 1  rate 88197.0 Hz
+t=   12 min  input  -50.6 dBFS  glitches 0 (total 5)  overloads 0  restarts 1  rate 88204.4 Hz
+  glitch at 740.224 s (21:05:38.795): blip, phase jump -0.4 samples
+  glitch at 741.214 s (21:05:39.785): blip, phase jump -0.2 samples
+t=   13 min  input  -50.6 dBFS  glitches 2 (total 7)  overloads 0  restarts 1  rate 88201.4 Hz
+t=   14 min  input  -50.6 dBFS  glitches 0 (total 7)  overloads 0  restarts 1  rate 88275.8 Hz
+  glitch at 882.235 s (21:08:00.806): phase jump, phase jump -0.8 samples
+  glitch at 882.245 s (21:08:00.816): phase jump, phase jump -0.7 samples
+  glitch at 882.255 s (21:08:00.826): blip, phase jump -0.4 samples
+  glitch at 882.271 s (21:08:00.842): blip, phase jump +0.5 samples
+  glitch at 882.284 s (21:08:00.855): phase jump, phase jump +0.6 samples
+t=   15 min  input  -50.6 dBFS  glitches 5 (total 12)  overloads 0  restarts 1  rate 88200.5 Hz
+t=   16 min  input  -50.6 dBFS  glitches 0 (total 12)  overloads 0  restarts 1  rate 88202.3 Hz
+t=   17 min  input  -50.6 dBFS  glitches 0 (total 12)  overloads 0  restarts 1  rate 88202.1 Hz
+t=   18 min  input  -50.6 dBFS  glitches 0 (total 12)  overloads 0  restarts 1  rate 88201.4 Hz
+t=   19 min  input  -50.6 dBFS  glitches 0 (total 12)  overloads 0  restarts 1  rate 88203.0 Hz
+t=   20 min  input  -50.6 dBFS  glitches 0 (total 12)  overloads 0  restarts 1  rate 88201.4 Hz
+t=   21 min  input  -50.6 dBFS  glitches 0 (total 12)  overloads 0  restarts 1  rate 88203.0 Hz
+t=   22 min  input  -50.6 dBFS  glitches 0 (total 12)  overloads 0  restarts 1  rate 88201.3 Hz
+  glitch at 1368.845 s (21:16:07.416): phase jump, phase jump -0.6 samples
+t=   23 min  input  -50.6 dBFS  glitches 1 (total 13)  overloads 0  restarts 1  rate 88202.0 Hz
+t=   24 min  input  -50.6 dBFS  glitches 0 (total 13)  overloads 0  restarts 1  rate 88202.6 Hz
+t=   25 min  input  -50.6 dBFS  glitches 0 (total 13)  overloads 0  restarts 1  rate 88202.0 Hz
+t=   26 min  input  -50.6 dBFS  glitches 0 (total 13)  overloads 0  restarts 1  rate 88202.9 Hz
+t=   27 min  input  -50.6 dBFS  glitches 0 (total 13)  overloads 0  restarts 1  rate 88202.1 Hz
+  glitch at 1643.468 s (21:20:42.039): phase jump, phase jump +0.8 samples
+t=   28 min  input  -50.6 dBFS  glitches 1 (total 14)  overloads 0  restarts 1  rate 88190.1 Hz
+t=   29 min  input  -50.6 dBFS  glitches 0 (total 14)  overloads 0  restarts 1  rate 88202.1 Hz
+t=   30 min  input  -50.6 dBFS  glitches 0 (total 14)  overloads 0  restarts 1  rate 88201.5 Hz
+t=   31 min  input  -50.6 dBFS  glitches 0 (total 14)  overloads 0  restarts 1  rate 88208.9 Hz
+done: 14 glitches, 0 overloads in 30 min
+ftu-daemon: 20:58:58.009 playback underruns 3, usb errors 0, plugin late writes 0, short reads 0, input jumps 0, output jumps 0, lead frames added 0, dropped 0, lead jumps 3, fallback packets 384, capture errors 0, playback errors 0, fifo overflows 0, stalls 2
+=== 96000 Hz, 21:24:19
+rate 96000 Hz, buffer 512 frames
+reported: input latency 0 + stream 45, safety 2304; output latency 0 + stream 46, safety 2304
+burst  1:    90.82 frames (0.946 ms), gain +0.04
+round trip 90.82 frames (0.946 ms), spread 0.00; reported latency sum 91; unreported -0.18 frames (-0.002 ms)
+soak: 30.0 min, 997 Hz at -20.0 dBFS, output 1 -> input 1, 96000.0 Hz
+  engine reconfigured at 0.1 s, restarting
+t=    1 min  input  -50.6 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 95834.1 Hz
+t=    2 min  input  -50.6 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 96002.4 Hz
+t=    3 min  input  -50.6 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 96162.1 Hz
+t=    4 min  input  -50.6 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 96001.8 Hz
+t=    5 min  input  -50.6 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 95996.5 Hz
+t=    6 min  input  -50.6 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 96002.4 Hz
+t=    7 min  input  -50.6 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 95904.3 Hz
+  glitch at 439.842 s (21:31:42.833): blip, phase jump +0.2 samples
+t=    8 min  input  -50.6 dBFS  glitches 1 (total 1)  overloads 0  restarts 1  rate 96000.7 Hz
+t=    9 min  input  -50.6 dBFS  glitches 0 (total 1)  overloads 0  restarts 1  rate 95999.2 Hz
+t=   10 min  input  -50.6 dBFS  glitches 0 (total 1)  overloads 0  restarts 1  rate 96001.5 Hz
+t=   11 min  input  -50.6 dBFS  glitches 0 (total 1)  overloads 0  restarts 1  rate 96000.9 Hz
+t=   12 min  input  -50.6 dBFS  glitches 0 (total 1)  overloads 0  restarts 1  rate 96000.8 Hz
+t=   13 min  input  -50.6 dBFS  glitches 0 (total 1)  overloads 0  restarts 1  rate 96000.3 Hz
+t=   14 min  input  -50.6 dBFS  glitches 0 (total 1)  overloads 0  restarts 1  rate 95995.4 Hz
+t=   15 min  input  -50.6 dBFS  glitches 0 (total 1)  overloads 0  restarts 1  rate 96000.7 Hz
+t=   16 min  input  -50.6 dBFS  glitches 0 (total 1)  overloads 0  restarts 1  rate 95999.9 Hz
+t=   17 min  input  -50.6 dBFS  glitches 0 (total 1)  overloads 0  restarts 1  rate 96001.7 Hz
+t=   18 min  input  -50.6 dBFS  glitches 0 (total 1)  overloads 0  restarts 1  rate 96000.9 Hz
+t=   19 min  input  -50.6 dBFS  glitches 0 (total 1)  overloads 0  restarts 1  rate 96000.7 Hz
+t=   20 min  input  -50.6 dBFS  glitches 0 (total 1)  overloads 0  restarts 1  rate 96000.6 Hz
+t=   21 min  input  -50.6 dBFS  glitches 0 (total 1)  overloads 0  restarts 1  rate 96000.9 Hz
+t=   22 min  input  -50.6 dBFS  glitches 0 (total 1)  overloads 0  restarts 1  rate 96000.7 Hz
+t=   23 min  input  -50.6 dBFS  glitches 0 (total 1)  overloads 0  restarts 1  rate 96000.0 Hz
+t=   24 min  input  -50.6 dBFS  glitches 0 (total 1)  overloads 0  restarts 1  rate 96001.6 Hz
+t=   25 min  input  -50.6 dBFS  glitches 0 (total 1)  overloads 0  restarts 1  rate 96000.6 Hz
+t=   26 min  input  -50.6 dBFS  glitches 0 (total 1)  overloads 0  restarts 1  rate 96000.9 Hz
+t=   27 min  input  -50.6 dBFS  glitches 0 (total 1)  overloads 0  restarts 1  rate 96141.6 Hz
+  glitch at 1620.519 s (21:51:23.510): blip, phase jump +0.0 samples
+t=   28 min  input  -50.6 dBFS  glitches 1 (total 2)  overloads 0  restarts 1  rate 96019.8 Hz
+t=   29 min  input  -50.6 dBFS  glitches 0 (total 2)  overloads 0  restarts 1  rate 96000.7 Hz
+t=   30 min  input  -50.6 dBFS  glitches 0 (total 2)  overloads 0  restarts 1  rate 96029.7 Hz
+done: 2 glitches, 0 overloads in 30 min
+ftu-daemon: 21:24:23.321 playback underruns 5, usb errors 0, plugin late writes 0, short reads 0, input jumps 0, output jumps 0, lead frames added 0, dropped 0, lead jumps 4, fallback packets 512, capture errors 0, playback errors 0, fifo overflows 0, stalls 2
+=== 48000 Hz, 21:54:23
+rate 48000 Hz, buffer 512 frames
+reported: input latency 0 + stream 31, safety 1152; output latency 0 + stream 32, safety 1152
+burst  1:    70.97 frames (1.479 ms), gain +0.04
+round trip 70.97 frames (1.479 ms), spread 0.00; reported latency sum 63; unreported 7.97 frames (0.166 ms)
+soak: 30.0 min, 997 Hz at -20.0 dBFS, output 1 -> input 1, 48000.0 Hz
+  engine reconfigured at 0.1 s, restarting
+t=    1 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 47996.4 Hz
+t=    2 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 48001.2 Hz
+t=    3 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 48000.3 Hz
+t=    4 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 48001.1 Hz
+t=    5 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 48000.8 Hz
+t=    6 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 48000.7 Hz
+t=    7 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 48000.7 Hz
+t=    8 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 48000.7 Hz
+t=    9 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 48000.7 Hz
+t=   10 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 48000.3 Hz
+t=   11 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 48000.7 Hz
+t=   12 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 47997.8 Hz
+t=   13 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 48000.7 Hz
+t=   14 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 48000.3 Hz
+t=   15 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 48000.8 Hz
+t=   16 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 48000.7 Hz
+t=   17 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 48000.7 Hz
+t=   18 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 48000.7 Hz
+t=   19 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 48000.7 Hz
+t=   20 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 48000.0 Hz
+t=   21 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 48001.4 Hz
+t=   22 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 48001.1 Hz
+t=   23 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 48003.7 Hz
+t=   24 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 48000.7 Hz
+t=   25 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 48000.8 Hz
+t=   26 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 48080.7 Hz
+t=   27 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 48000.7 Hz
+t=   28 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 47936.1 Hz
+t=   29 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 47996.3 Hz
+t=   30 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 47999.7 Hz
+done: 0 glitches, 0 overloads in 30 min
+ftu-daemon: 21:54:27.758 playback underruns 7, usb errors 0, plugin late writes 0, short reads 0, input jumps 0, output jumps 0, lead frames added 0, dropped 0, lead jumps 5, fallback packets 640, capture errors 0, playback errors 0, fifo overflows 0, stalls 2
+=== end 22:24:28

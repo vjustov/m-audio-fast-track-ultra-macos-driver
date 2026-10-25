@@ -1,0 +1,119 @@
+hwtest 20261025-1848, loop output 1 -> input 1
+PASS  daemon: status {
+  "clock": "internal",
+  "clock_locked": null,
+  "connected": true,
+  "driver": "0.1.0",
+  "firmware": "1.51",
+  "port": "USB 2.0",
+  "power": "psu",
+  "sample_rate": 48000,
+  "startup_power": "psu",
+  "streaming": true
+}
+PASS  coreaudiod idle (before): 0.0% CPU
+PASS  loopback: 62.97 frames at 48 kHz
+channel map, outputs 1-6 to inputs 1-6:
+  channel 1: 62.97 frames
+  channel 2: 62.97 frames
+  channel 3: 62.92 frames
+  channel 4: 62.96 frames
+  channel 5: 61.89 frames
+  channel 6: 61.96 frames
+FAIL  channel map 1-6: round trips 61.89 to 62.97 frames
+rate matrix, playback delay 0 ms (vendor-style delay off):
+   48000 ->  44100:   61.94 frames, unreported  -0.06
+   88200 ->  44100:   68.94 frames, unreported   6.94
+   96000 ->  44100:   69.95 frames, unreported   7.95
+   44100 ->  48000:   62.98 frames, unreported  -0.02
+   88200 ->  48000:   67.97 frames, unreported   4.97
+   96000 ->  48000:   70.97 frames, unreported   7.97
+   44100 ->  88200:   85.78 frames, unreported  -0.22
+   48000 ->  88200:   85.78 frames, unreported  -0.22
+   96000 ->  88200:   86.78 frames, unreported   0.78
+   44100 ->  96000:   90.83 frames, unreported  -0.17
+   48000 ->  96000:   90.82 frames, unreported  -0.18
+   88200 ->  96000:   90.82 frames, unreported  -0.18
+   48000 ->  44100:   61.95 frames, unreported  -0.05
+   88200 ->  44100:   68.95 frames, unreported   6.95
+   96000 ->  44100:   75.95 frames, unreported  13.95
+   44100 ->  48000:   62.98 frames, unreported  -0.02
+   88200 ->  48000:   68.97 frames, unreported   5.97
+   96000 ->  48000:   66.97 frames, unreported   3.97
+   44100 ->  88200:   85.78 frames, unreported  -0.22
+   48000 ->  88200:   85.78 frames, unreported  -0.22
+   96000 ->  88200:   88.78 frames, unreported   2.78
+   44100 ->  96000:   90.83 frames, unreported  -0.17
+   48000 ->  96000:   90.82 frames, unreported  -0.18
+   88200 ->  96000:   89.82 frames, unreported  -1.18
+FAIL  delay 0: round trip at 44100 Hz repeats: 61.94 to 75.95 frames
+FAIL  delay 0: round trip at 48000 Hz repeats: 62.98 to 70.97 frames
+FAIL  delay 0: round trip at 88200 Hz repeats: 85.78 to 88.78 frames
+FAIL  delay 0: round trip at 96000 Hz repeats: 89.82 to 90.83 frames
+FAIL  delay 0: reported latency matches: worst unreported 13.95 frames
+rate matrix, playback delay 10 ms:
+   48000 ->  44100:   62.95 frames, unreported   0.95
+   88200 ->  44100:   68.95 frames, unreported   6.95
+   96000 ->  44100:   70.94 frames, unreported   8.94
+   44100 ->  48000:   62.98 frames, unreported  -0.02
+   88200 ->  48000:   68.97 frames, unreported   5.97
+   96000 ->  48000:   66.97 frames, unreported   3.97
+   44100 ->  88200:   84.78 frames, unreported  -1.22
+   48000 ->  88200:   85.78 frames, unreported  -0.22
+   96000 ->  88200:   87.78 frames, unreported   1.78
+   44100 ->  96000:   90.82 frames, unreported  -0.18
+   48000 ->  96000:   90.82 frames, unreported  -0.18
+   88200 ->  96000:   91.82 frames, unreported   0.82
+   48000 ->  44100:   62.95 frames, unreported   0.95
+   88200 ->  44100:   72.95 frames, unreported  10.95
+   96000 ->  44100:   70.94 frames, unreported   8.94
+   44100 ->  48000:   62.98 frames, unreported  -0.02
+   88200 ->  48000:   67.97 frames, unreported   4.97
+   96000 ->  48000:   70.97 frames, unreported   7.97
+   44100 ->  88200:   85.78 frames, unreported  -0.22
+   48000 ->  88200:   85.78 frames, unreported  -0.22
+   96000 ->  88200:   87.78 frames, unreported   1.78
+   44100 ->  96000:   90.82 frames, unreported  -0.18
+   48000 ->  96000:   90.82 frames, unreported  -0.18
+   88200 ->  96000:   90.83 frames, unreported  -0.17
+FAIL  delay 10: round trip at 44100 Hz repeats: 62.95 to 72.95 frames
+FAIL  delay 10: round trip at 48000 Hz repeats: 62.98 to 70.97 frames
+FAIL  delay 10: round trip at 88200 Hz repeats: 84.78 to 87.78 frames
+PASS  delay 10: round trip at 96000 Hz repeats: 90.82 to 91.82 frames
+FAIL  delay 10: reported latency matches: worst unreported 10.95 frames
+stall recovery (soak 1.5 min, three 20 ms stalls):
+  stall 20 ms injected
+  stall 20 ms injected
+  stall 20 ms injected
+  glitch at 19.850 s (18:55:44.866): phase jump, phase jump +12.5 samples
+  glitch at 19.888 s (18:55:44.904): phase jump, phase jump -1.0 samples
+  glitch at 19.901 s (18:55:44.917): phase jump, phase jump -1.0 samples
+  glitch at 20.233 s (18:55:45.249): phase jump, phase jump -5.9 samples
+  glitch at 20.270 s (18:55:45.286): phase jump, phase jump -1.0 samples
+  glitch at 35.927 s (18:56:00.943): blip, phase jump -0.0 samples
+  glitch at 39.903 s (18:56:04.918): phase jump, phase jump +7.7 samples
+  glitch at 39.954 s (18:56:04.969): phase jump, phase jump -1.9 samples
+  glitch at 41.365 s (18:56:06.380): phase jump, phase jump -5.3 samples
+  glitch at 41.409 s (18:56:06.425): phase jump, phase jump -1.1 samples
+  t=    1 min  input  -50.5 dBFS  glitches 10 (total 10)  overloads 0  restarts 1  rate 47918.0 Hz
+  glitch at 59.915 s (18:56:24.931): phase jump, phase jump +8.2 samples
+  glitch at 59.966 s (18:56:24.982): phase jump, phase jump -2.1 samples
+  glitch at 62.007 s (18:56:27.023): phase jump, phase jump -5.2 samples
+  t=    2 min  input  -50.5 dBFS  glitches 3 (total 13)  overloads 0  restarts 1  rate 47999.9 Hz
+  done: 13 glitches, 0 overloads in 1 min
+FAIL  stalls: one lead jump each: 7 lead jumps
+FAIL  stalls: at most one glitch each: 13 glitches
+soak (5 min):
+  t=    1 min  input  -50.5 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 47998.0 Hz
+  t=    2 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 48000.6 Hz
+  t=    3 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 48000.2 Hz
+  glitch at 228.327 s (19:01:16.835): blip, phase jump -0.1 samples
+  t=    4 min  input  -50.4 dBFS  glitches 1 (total 1)  overloads 0  restarts 1  rate 47993.5 Hz
+  t=    5 min  input  -50.4 dBFS  glitches 0 (total 1)  overloads 0  restarts 1  rate 48000.2 Hz
+  done: 1 glitches, 0 overloads in 5 min
+FAIL  soak: no glitches: 1 glitches, 0 overloads
+FAIL  soak: no lead jumps or USB errors: 1 lead jumps, 0 USB error lines
+PASS  coreaudiod idle (after): 0.0% CPU
+
+5 passed, 14 failed: channel map 1-6; delay 0: round trip at 44100 Hz repeats; delay 0: round trip at 48000 Hz repeats; delay 0: round trip at 88200 Hz repeats; delay 0: round trip at 96000 Hz repeats; delay 0: reported latency matches; delay 10: round trip at 44100 Hz repeats; delay 10: round trip at 48000 Hz repeats; delay 10: round trip at 88200 Hz repeats; delay 10: reported latency matches; stalls: one lead jump each; stalls: at most one glitch each; soak: no glitches; soak: no lead jumps or USB errors
+log: /Users/vjustov/code/m-audio-interface-firmware/captures/hwtest-20261025-1848.txt
