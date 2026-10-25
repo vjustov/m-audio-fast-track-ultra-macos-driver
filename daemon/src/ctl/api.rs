@@ -197,4 +197,51 @@ mod tests {
         }
         let _ = std::fs::remove_dir_all(&d);
     }
+
+    /// The replies the panel decodes (panel/Sources/FastTrackUltraPanel/Model.swift),
+    /// checked against `shared/fixtures/`. The panel's tests decode the same files, so a
+    /// change on either side that breaks the other fails a test. After an intended
+    /// change: `UPDATE_FIXTURES=1 cargo test contract`, then run the panel's tests.
+    #[test]
+    fn contract_fixtures_match() {
+        let (c, d) = control("contract");
+        // A state with every kind of value, not only defaults (null levels, zero pans).
+        let set = r#"{"set": [["bus1.in1.level", "-6"], ["bus1.in1.pan", "0.25"], ["bus2.daw3.mute", "on"], ["link.in1", "on"],
+            ["fx.program", "delay"], ["fx.send.in2", "-10"], ["fx.return.1", "-3"], ["fx.bypass.2", "on"], ["out1.level", "-1.5"]]}"#;
+        assert_eq!(c.handle(set), json!({ "ok": true }));
+        {
+            let mut st = c.status.lock().unwrap();
+            st.connected = true;
+            st.sample_rate = Some(48000);
+            st.firmware = Some("1.51".into());
+            st.port = Some("USB 2.0");
+            st.clock = Some(ClockSource::Internal);
+        }
+        let mut recent = [0u16; 26];
+        recent[0] = 3276;
+        *c.meters.lock().unwrap() = Some(super::super::Meters {
+            words: std::array::from_fn(|i| if i == 26 { 0x0100 } else { recent.get(i).map_or(0, |&v| v as i16) }),
+            recent: vec![recent],
+            at: std::time::Instant::now(),
+        });
+        let mut status = c.handle(r#"{"get": "status"}"#);
+        status["driver"] = json!("0.0.0");
+        let mut meters = c.handle(r#"{"get": "meters"}"#);
+        meters["age_ms"] = json!(0);
+        let replies = [("mixer-state.json", c.handle(r#"{"get": "state"}"#)), ("status.json", status), ("meters.json", meters)];
+
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../shared/fixtures");
+        for (name, v) in replies {
+            let path = dir.join(name);
+            let text = serde_json::to_string_pretty(&v).unwrap() + "\n";
+            if std::env::var_os("UPDATE_FIXTURES").is_some() {
+                std::fs::create_dir_all(&dir).unwrap();
+                std::fs::write(&path, &text).unwrap();
+                continue;
+            }
+            let want = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e} (run with UPDATE_FIXTURES=1)", path.display()));
+            assert_eq!(text, want, "{name} changed: update the fixture and the panel (see the comment above)");
+        }
+        let _ = std::fs::remove_dir_all(&d);
+    }
 }

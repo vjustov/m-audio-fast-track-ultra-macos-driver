@@ -5,7 +5,7 @@
 //! in `Watch` and `after_stop`, free of I/O, so they can be tested.
 
 use crate::ctl::{self, Control, DeviceSync, Store};
-use crate::shm::{Shm, ShmRegion};
+use crate::shm::{Counters, Shm, ShmRegion};
 use crate::stream::{Stream, StreamConfig};
 use crate::usb::{ClockSource, Device};
 use crate::{wall_clock, SERVICE_NAME};
@@ -193,12 +193,12 @@ fn device_rate(dev: &Device) -> Option<u32> {
 /// wall-clock time so events can be matched with a client's log.
 struct CounterLog {
     last: Instant,
-    reported: [u64; 15],
+    reported: Counters,
 }
 
 impl CounterLog {
     fn new() -> Self {
-        Self { last: Instant::now(), reported: [0; 15] }
+        Self { last: Instant::now(), reported: Counters::default() }
     }
 
     fn maybe_log(&mut self, s: &Shm) {
@@ -206,49 +206,14 @@ impl CounterLog {
             return;
         }
         self.last = Instant::now();
-        let mut now = [
-            &s.play_underruns,
-            &s.usb_errors,
-            &s.plugin_late_writes,
-            &s.plugin_short_reads,
-            &s.plugin_input_jumps,
-            &s.plugin_output_jumps,
-            &s.lead_frames_added,
-            &s.lead_frames_dropped,
-            &s.lead_jumps,
-            &s.fallback_packets,
-            &s.capture_errors,
-            &s.playback_errors,
-            &s.fifo_overflows,
-            &s.callback_stalls,
-            &s.max_callback_gap_us,
-        ]
-        .map(|c| c.load(Ordering::Relaxed));
-        // The max gap is since the previous line, so it does not trigger one.
-        if now[..14] == self.reported[..14] {
+        let now = s.counters();
+        if now == self.reported {
             return;
         }
-        now[14] = s.max_callback_gap_us.swap(0, Ordering::Relaxed);
-        eprintln!(
-            "ftu-daemon: {} playback underruns {}, usb errors {}, plugin late writes {}, short reads {}, input jumps {}, output jumps {}, lead frames added {}, dropped {}, lead jumps {}, fallback packets {}, capture errors {}, playback errors {}, fifo overflows {}, stalls {}, max gap {} us, lead {} frames",
-            wall_clock(),
-            now[0],
-            now[1],
-            now[2],
-            now[3],
-            now[4],
-            now[5],
-            now[6],
-            now[7],
-            now[8],
-            now[9],
-            now[10],
-            now[11],
-            now[12],
-            now[13],
-            now[14],
-            s.play_read_pos.load(Ordering::Relaxed) as i64 - s.cap_write_pos.load(Ordering::Relaxed) as i64
-        );
+        // The max gap is since the previous line, so it does not trigger one.
+        let max_gap = s.max_callback_gap_us.swap(0, Ordering::Relaxed);
+        let lead = s.play_read_pos.load(Ordering::Relaxed) as i64 - s.cap_write_pos.load(Ordering::Relaxed) as i64;
+        eprintln!("ftu-daemon: {} {now}, max gap {max_gap} us, lead {lead} frames", wall_clock());
         self.reported = now;
     }
 }
