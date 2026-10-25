@@ -2,7 +2,7 @@
 
 use super::{Control, Meters};
 use crate::mixer::Ctl;
-use crate::usb::Device;
+use crate::usb::Usb;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
@@ -29,7 +29,7 @@ impl DeviceSync {
 
     /// Sends state changes that are not yet on the device, polls the meters, and waits
     /// up to `timeout` for the next change.
-    pub fn service(&mut self, control: &Control, dev: &Device, timeout: Duration) {
+    pub fn service(&mut self, control: &Control, dev: &impl Usb, timeout: Duration) {
         let poll_due = control.meters.lock().unwrap().as_ref().map_or(true, |m| m.at.elapsed() >= METER_PERIOD);
         if poll_due {
             self.poll_meters(control, dev);
@@ -51,7 +51,7 @@ impl DeviceSync {
         }
     }
 
-    fn poll_meters(&mut self, control: &Control, dev: &Device) {
+    fn poll_meters(&mut self, control: &Control, dev: &impl Usb) {
         let Ok(words) = dev.read_meters_raw() else { return };
         let mut meters = control.meters.lock().unwrap();
         let mut recent = meters.as_ref().map_or_else(Vec::new, |m| m.recent.clone());
@@ -74,7 +74,7 @@ impl DeviceSync {
 
     /// Sends the controls whose value differs from what the device holds. Returns false
     /// if a transfer failed; the rest are sent on a later pass.
-    fn send(&mut self, dev: &Device, controls: Vec<Ctl>) -> bool {
+    fn send(&mut self, dev: &impl Usb, controls: Vec<Ctl>) -> bool {
         let mut n = 0;
         for c in controls {
             if self.sent.get(&c.key()) == Some(&c.data) {
