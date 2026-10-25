@@ -42,6 +42,7 @@ pub struct Shm {
     /// 0 internal, 1 S/PDIF: the clock the running stream uses.
     pub clock_source: AtomicU32,
     /// 1 while the device is plugged in, 0 while it is not. Unchanged over system sleep.
+    /// Starts at 1: the daemon only reports absence after an open fails.
     pub device_present: AtomicU32,
 
     pub fallback_packets: AtomicU64,
@@ -143,6 +144,10 @@ impl ShmRegion {
             (*ptr).version = VERSION;
             (*ptr).channels = CHANNELS as u32;
             (*ptr).ring_frames = RING_FRAMES as u32;
+            // Present until the first open fails. A plugin reconnecting to a restarted
+            // daemon reads this before the device is opened; a passing 0 made Core
+            // Audio drop the device under playing clients.
+            (*ptr).device_present = AtomicU32::new(1);
         }
         Ok(Self { ptr, len })
     }

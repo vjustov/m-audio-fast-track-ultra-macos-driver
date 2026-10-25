@@ -70,7 +70,8 @@ typedef struct {
     // Clock the running stream uses: 0 internal, 1 S/PDIF. Written by the daemon at stream start.
     FTU_ATOMIC(uint32_t) clock_source;
     // 1 while the device is plugged in, 0 while it is not; unchanged over system sleep.
-    // Changes are also pushed to connected plugins over XPC ("presence").
+    // Changes are also pushed to connected plugins over XPC ("presence"). Starts at 1:
+    // the daemon only reports absence after an open fails.
     FTU_ATOMIC(uint32_t) device_present;
 
     // Stream diagnostics, written by the daemon's USB thread.
