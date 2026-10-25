@@ -22,6 +22,7 @@
 #include <thread>
 #include <vector>
 
+#include "DaemonLink.hpp"
 #include "ftu_shm.h"
 
 #include <cstddef>
@@ -34,15 +35,12 @@ static_assert(sizeof(ftu_shm_t) == 216 + 2 * FTU_RING_FRAMES * FTU_CHANNELS * si
 
 namespace {
 
-constexpr const char* kServiceName = "local.ftu.daemon";
+using ftu::DaemonLink;
+using ftu::Log;
+
 constexpr UInt32 kDefaultRate = 48000;
 constexpr UInt32 kRates[] = {44100, 48000, 88200, 96000};
 constexpr UInt32 kZeroTimeStampPeriod = 2048;
-// Upper bounds for waiting on the daemon. These waits run on coreaudiod threads, some
-// inside HAL configuration changes, so a stuck daemon must not stall them for long.
-// The daemon restarts the stream for a rate change in 0.1 to 0.25 s.
-constexpr int64_t kReplyTimeoutMs = 300;
-constexpr int kRateWaitMs = 1000;
 
 // The daemon keeps 16 ms of playback queued ahead of capture (daemon/src/stream.rs,
 // OUT_XFERS x OUT_PACKETS), so Core Audio must write output at least that far ahead.
@@ -95,224 +93,13 @@ struct RateState
 };
 constexpr UInt64 kSeedBase = 1000;  // keeps daemon seeds apart from libASPL's synthetic clock
 
-os_log_t Log()
+// Identifies the daemon timeline IO is on: a stream generation within one connection.
+// A restarted daemon counts generations from 0 again, so the connection count is part
+// of it. Realtime-safe.
+UInt64 TimelineId(const DaemonLink& link, const ftu_shm_t* s)
 {
-    static os_log_t log = os_log_create("local.ftu.plugin", "driver");
-    return log;
+    return (link.Epoch() << 32) + s->generation.load(std::memory_order_acquire);
 }
-
-// Connection to ftu-daemon and the mapped shared memory.
-// The mapping is never unmapped while the plugin lives: realtime threads may hold the
-// pointer. A reconnect replaces it and leaks the old mapping (one per daemon restart).
-class DaemonLink
-{
-public:
-    const ftu_shm_t* Shm() const
-    {
-        return shm_.load(std::memory_order_acquire);
-    }
-
-    // Connects if needed and moves the daemon to `rate` on a background queue, so the
-    // caller (StartIO) never waits on the daemon. IO plays silence and timestamps fall
-    // back to the host clock until the daemon streams at `rate`. Rate 0 only connects.
-    void PrepareAsync(UInt32 rate)
-    {
-        dispatch_async(Queue(), ^{
-            std::lock_guard<std::mutex> lock(mutex_);
-            if (!Shm() || stale_.load(std::memory_order_acquire)) {
-                Connect();
-            }
-            const ftu_shm_t* s = Shm();
-            // On S/PDIF clock the source sets the rate and the daemon ignores requests.
-            if (rate != 0 && s && s->clock_source.load() == 0 && s->sample_rate.load() != rate) {
-                RequestRateLocked(rate);
-            }
-        });
-    }
-
-    // Called with the device's presence when the daemon reports it: on connect and on
-    // each push. Set once, before the first connection.
-    void SetPresenceHandler(std::function<void(bool)> f)
-    {
-        onPresence_ = std::move(f);
-    }
-
-    // Asks the daemon to stream at `rate` and waits until it does, at most about
-    // kReplyTimeoutMs + kRateWaitMs. Not realtime-safe.
-    bool RequestRate(UInt32 rate)
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return RequestRateLocked(rate);
-    }
-
-private:
-    static dispatch_queue_t Queue()
-    {
-        static dispatch_queue_t q = dispatch_queue_create("local.ftu.plugin.daemon", DISPATCH_QUEUE_SERIAL);
-        return q;
-    }
-
-    // Sends `msg` and waits up to kReplyTimeoutMs for the reply. Returns the reply
-    // (caller releases) or nullptr on timeout, in which case the connection is marked
-    // stale so the next call reconnects. A late reply is dropped by the handler.
-    xpc_object_t SendWithTimeout(xpc_object_t msg)
-    {
-        struct Pending
-        {
-            dispatch_semaphore_t done = dispatch_semaphore_create(0);
-            std::atomic<xpc_object_t> reply{nullptr};
-            std::atomic<bool> abandoned{false};
-            ~Pending()
-            {
-                if (xpc_object_t r = reply.load()) {
-                    xpc_release(r);
-                }
-                dispatch_release(done);
-            }
-        };
-        auto p = std::make_shared<Pending>();
-        xpc_connection_send_message_with_reply(conn_, msg, ReplyQueue(), ^(xpc_object_t r) {
-            if (!p->abandoned.load()) {
-                p->reply.store(xpc_retain(r));
-            }
-            dispatch_semaphore_signal(p->done);
-        });
-        if (dispatch_semaphore_wait(p->done, dispatch_time(DISPATCH_TIME_NOW, kReplyTimeoutMs * NSEC_PER_MSEC)) != 0) {
-            p->abandoned.store(true);
-            stale_.store(true, std::memory_order_release);
-            os_log_error(Log(), "no reply from %{public}s within %lld ms", kServiceName, kReplyTimeoutMs);
-            return nullptr;
-        }
-        return xpc_retain(p->reply.load());
-    }
-
-    // Replies arrive here, never on Queue(), which may be blocked waiting for them.
-    static dispatch_queue_t ReplyQueue()
-    {
-        static dispatch_queue_t q = dispatch_queue_create("local.ftu.plugin.reply", DISPATCH_QUEUE_SERIAL);
-        return q;
-    }
-
-    bool RequestRateLocked(UInt32 rate)
-    {
-        if (!Shm() || stale_.load(std::memory_order_acquire)) {
-            Connect();
-        }
-        const ftu_shm_t* s = Shm();
-        if (!s || !conn_) {
-            return false;
-        }
-        if (s->sample_rate.load() == rate && s->running.load()) {
-            return true;
-        }
-        const uint64_t gen = s->generation.load();
-
-        xpc_object_t msg = xpc_dictionary_create(nullptr, nullptr, 0);
-        xpc_dictionary_set_string(msg, "op", "set_rate");
-        xpc_dictionary_set_uint64(msg, "rate", rate);
-        xpc_object_t reply = SendWithTimeout(msg);
-        xpc_release(msg);
-        if (!reply) {
-            return false;
-        }
-        const bool ok = xpc_get_type(reply) == XPC_TYPE_DICTIONARY && xpc_dictionary_get_bool(reply, "ok");
-        xpc_release(reply);
-        if (!ok) {
-            os_log_error(Log(), "daemon refused rate %u", rate);
-            return false;
-        }
-
-        // The daemon restarts the stream: wait for a new generation at the new rate.
-        for (int i = 0; i < kRateWaitMs / 10; i++) {
-            if (s->generation.load() != gen && s->sample_rate.load() == rate && s->running.load()) {
-                os_log(Log(), "rate changed to %u", rate);
-                return true;
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-        os_log_error(Log(), "timed out waiting for rate %u", rate);
-        return false;
-    }
-
-private:
-    void Connect()
-    {
-        if (conn_) {
-            xpc_connection_cancel(conn_);
-            xpc_release(conn_);
-            conn_ = nullptr;
-        }
-        conn_ = xpc_connection_create_mach_service(kServiceName, nullptr, 0);
-        if (!conn_) {
-            os_log_error(Log(), "cannot create connection to %{public}s", kServiceName);
-            return;
-        }
-        xpc_connection_set_event_handler(conn_, ^(xpc_object_t event) {
-            if (xpc_get_type(event) == XPC_TYPE_ERROR) {
-                // Daemon exited or restarted: its new shared region is a different one.
-                stale_.store(true, std::memory_order_release);
-                return;
-            }
-            const char* op = xpc_dictionary_get_string(event, "op");
-            if (op && std::strcmp(op, "presence") == 0) {
-                Presence(xpc_dictionary_get_bool(event, "present"));
-            }
-        });
-        xpc_connection_resume(conn_);
-
-        xpc_object_t msg = xpc_dictionary_create(nullptr, nullptr, 0);
-        xpc_dictionary_set_string(msg, "op", "hello");
-        xpc_object_t reply = SendWithTimeout(msg);
-        xpc_release(msg);
-        if (!reply) {
-            return;
-        }
-        if (xpc_get_type(reply) != XPC_TYPE_DICTIONARY) {
-            os_log_error(Log(), "no reply from %{public}s (daemon not running?)", kServiceName);
-            xpc_release(reply);
-            return;
-        }
-        const uint64_t version = xpc_dictionary_get_uint64(reply, "version");
-        xpc_object_t shmObj = xpc_dictionary_get_value(reply, "shm");
-        void* addr = nullptr;
-        const size_t len = shmObj ? xpc_shmem_map(shmObj, &addr) : 0;
-        xpc_release(reply);
-
-        if (version != FTU_SHM_VERSION || len < sizeof(ftu_shm_t) || !addr) {
-            os_log_error(Log(), "bad handshake: version %llu, size %zu", version, len);
-            return;
-        }
-        auto* shm = static_cast<const ftu_shm_t*>(addr);
-        if (shm->magic != FTU_SHM_MAGIC || shm->channels != FTU_CHANNELS ||
-            shm->ring_frames != FTU_RING_FRAMES) {
-            os_log_error(Log(), "shared memory header mismatch");
-            return;
-        }
-        stale_.store(false, std::memory_order_release);
-        shm_.store(shm, std::memory_order_release);
-        os_log(Log(), "connected to %{public}s", kServiceName);
-        Presence(shm->device_present.load(std::memory_order_acquire) != 0);
-    }
-
-    // Hands presence to the handler off the caller's thread, which may hold mutex_ or
-    // be an XPC handler: the handler notifies the HAL.
-    void Presence(bool present)
-    {
-        if (!onPresence_) {
-            return;
-        }
-        auto f = onPresence_;
-        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-            f(present);
-        });
-    }
-
-    std::mutex mutex_;
-    std::function<void(bool)> onPresence_;
-    xpc_connection_t conn_ = nullptr;
-    std::atomic<const ftu_shm_t*> shm_{nullptr};
-    std::atomic<bool> stale_{false};
-};
 
 struct ClockAnchor
 {
@@ -508,7 +295,7 @@ protected:
             *outSampleTime = zts;
             *outHostTime = static_cast<UInt64>(
                 static_cast<double>(a.hostTime) + (zts - a.sampleTime) * a.ticksPerFrame);
-            *outSeed = kSeedBase + s->generation.load(std::memory_order_acquire);
+            *outSeed = kSeedBase + TimelineId(*link_, s);
             return kAudioHardwareNoError;
         }
         return aspl::Device::GetZeroTimeStampImpl(clientID, outSampleTime, outHostTime, outSeed);
@@ -538,7 +325,13 @@ public:
         // Core Audio's nominal rate wins, except on S/PDIF clock. Done in the
         // background: StartIO holds up every client of the device while it runs.
         link_->PrepareAsync(rate_->rate.load());
+        os_log(Log(), "StartIO");
         return kAudioHardwareNoError;
+    }
+
+    void OnStopIO() override
+    {
+        os_log(Log(), "StopIO");
     }
 
     void OnReadClientInput(const std::shared_ptr<aspl::Client>& client,
@@ -556,7 +349,7 @@ public:
             return;
         }
         const uint64_t t = static_cast<uint64_t>(timestamp);
-        if (in_.Jumped(s, t, frames)) {
+        if (in_.Jumped(TimelineId(*link_, s), t, frames)) {
             const_cast<ftu_shm_t*>(s)->plugin_input_jumps.fetch_add(1, std::memory_order_relaxed);
         }
         const uint64_t written = s->cap_write_pos.load(std::memory_order_acquire);
@@ -582,7 +375,7 @@ public:
         }
         auto* shm = const_cast<ftu_shm_t*>(s);
         const uint64_t t = static_cast<uint64_t>(timestamp);
-        if (out_.Jumped(s, t, frames)) {
+        if (out_.Jumped(TimelineId(*link_, s), t, frames)) {
             shm->plugin_output_jumps.fetch_add(1, std::memory_order_relaxed);
         }
         const uint64_t readPos = shm->play_read_pos.load(std::memory_order_acquire);
@@ -612,9 +405,8 @@ private:
             generation = UINT64_MAX;
         }
 
-        bool Jumped(const ftu_shm_t* s, uint64_t t, UInt32 frames)
+        bool Jumped(uint64_t gen, uint64_t t, UInt32 frames)
         {
-            const uint64_t gen = s->generation.load(std::memory_order_relaxed);
             const bool jumped = gen == generation && t != end && t != start;
             if (gen != generation || t != start) {
                 generation = gen;
@@ -690,7 +482,19 @@ std::shared_ptr<aspl::Driver> CreateDriver()
     link->SetPresenceHandler([weak](bool present) {
         if (auto d = weak.lock()) {
             os_log(Log(), "device %{public}s", present ? "present" : "unplugged");
+            const bool back = present && !d->GetIsAlive();
             d->SetIsAlive(present);
+            // Going not alive stops the clients' IO, and coming back does not restart
+            // it. A configuration change makes clients reconfigure and start again.
+            if (back) {
+                d->RequestConfigurationChange();
+            }
+        }
+    });
+    // The new daemon's shared memory starts a new timeline (the seed changes with it).
+    link->SetReconnectHandler([weak] {
+        if (auto d = weak.lock()) {
+            d->RequestConfigurationChange();
         }
     });
 

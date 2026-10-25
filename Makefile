@@ -32,6 +32,9 @@ hwcheck: hwtest
 test:
 	cd daemon && cargo test --release
 	cd panel && swift test
+	cmake -S plugin -B plugin/build -DCMAKE_BUILD_TYPE=Release
+	cmake --build plugin/build --target daemon_link_tests
+	plugin/build/daemon_link_tests
 
 clean:
 	cd daemon && cargo clean
