@@ -21,7 +21,7 @@ pub const SERVICE_NAME: &str = "local.ftu.daemon";
 
 pub fn usage() -> ! {
     eprintln!(
-        "usage: ftu-daemon run\n       ftu-daemon ctl get [state|meters|status] | set PATH VALUE [PATH VALUE ...] | clock internal|spdif | stall MS | reset\n       ftu-daemon test [--rate HZ] [--seconds S] [--spdif] [--tone-channel 0-8] [--freq HZ] [--dbfs DB] [--record out.wav] [--switch]\n\
+        "usage: ftu-daemon run\n       ftu-daemon ctl get [state|meters|status] | set PATH VALUE [PATH VALUE ...] | clock internal|spdif | stall MS | playback-delay MS | reset\n       ftu-daemon test [--rate HZ] [--seconds S] [--spdif] [--tone-channel 0-8] [--freq HZ] [--dbfs DB] [--record out.wav] [--switch]\n\
          Tone channel 0 disables the tone. --switch streams 5 s on internal clock first, then\n\
          switches on the same handle, as the service does."
     );
@@ -54,6 +54,7 @@ fn run_ctl(args: Vec<String>) -> i32 {
         ["reset"] => serde_json::json!({ "reset": true }),
         ["clock", c] => serde_json::json!({ "clock": c }),
         ["stall", ms] => serde_json::json!({ "stall_ms": ms.parse::<u64>().unwrap_or_else(|_| usage()) }),
+        ["playback-delay", ms] => serde_json::json!({ "playback_delay_ms": ms.parse::<u64>().unwrap_or_else(|_| usage()) }),
         ["set", rest @ ..] if !rest.is_empty() && rest.len() % 2 == 0 => {
             serde_json::json!({ "set": rest.chunks(2).map(|p| [p[0], p[1]]).collect::<Vec<_>>() })
         }

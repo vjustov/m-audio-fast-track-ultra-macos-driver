@@ -44,6 +44,7 @@ D="/Library/Application Support/FastTrackUltra/ftu-daemon"
 "$D" ctl set bus1.in1.level -6 bus1.in1.pan 0.5
 "$D" ctl reset                     # defaults: DAW 1-8 to outputs 1-8, inputs off
 "$D" ctl stall 20                  # test hook: stalls the USB event thread once for 20 ms
+"$D" ctl playback-delay 0          # test hook: playback start delay (default 10 ms) from the next start
 ```
 
 | Path | Value |
@@ -72,6 +73,7 @@ Sources are `in1` to `in8` (7 and 8 are S/PDIF) and `daw1` to `daw8`. Several pa
 - **Lead control.** The lead is sampled once per playback transfer and smoothed over 20 ms. Errors over four packets are fixed in one jump, smaller ones outside a two-packet band by one frame at a time. After a start, and after a callback gap over 10 ms, the smoothed error follows the raw error for 24 transfers, so the jump is exact. The start-up jump corrects any error, so the round-trip latency is the same after every start.
 - **Two realtime threads.** On macOS libusb receives completions on its own CFRunLoop thread (`org.libusb.device-hotplug`) and then wakes the event thread. Both run with a time constraint policy. With the run-loop thread at normal priority, callback gaps of 3 to 20 ms happened about ten times a minute.
 - **Counters.** The daemon logs its stream counters (underruns, USB errors, lead corrections and jumps, fallback packets, stalls, max callback gap since the previous line) to `~/Library/Logs/ftu-daemon.log` at most once a second when they change, and each lead jump with its size.
+- **Start.** Playback is submitted 10 ms after capture, as the vendor kext does, so the device runs capture before it gets playback data. Expected to remove the higher round trip after switching down from 88.2 or 96 kHz; not yet measured.
 - **Sleep and hot-plug.** Before system sleep (IOKit power notification, `power_shim.c`) the service loop stops the stream and closes the device, then reopens it after wake and resends the mixer. Whether the device is plugged in is published in shared memory (`device_present`) and pushed to the plugin over XPC, which sets the device's IsAlive. Sleep does not change presence.
 - **Process model.** A LaunchDaemon with `UserName` set to the user, so `coreaudiod` can reach its XPC service without root.
 

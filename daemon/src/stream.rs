@@ -47,7 +47,15 @@ const S24_SCALE: f32 = 8_388_608.0;
 pub struct StreamConfig {
     pub sample_rate: u32,
     pub clock: ClockSource,
+    /// Time between submitting capture and playback, so the device runs capture this
+    /// long before it receives any playback data. The vendor kext starts playback 10 USB
+    /// frames (10 ms) after capture (kInitialInputFramesToSkip, docs/protocol.md).
+    pub playback_delay: Duration,
 }
+
+/// Playback start delay the daemon uses unless the `playback_delay_ms` test hook
+/// changes it.
+pub const PLAYBACK_DELAY: Duration = Duration::from_millis(10);
 
 #[derive(Default, Clone, Copy, Debug)]
 pub struct Stats {
@@ -410,6 +418,11 @@ impl Stream {
                 (EP_PLAY, out_cb, OUT_XFERS, OUT_PACKETS),
             ];
             for (endpoint, cb, count, packets) in plan {
+                if endpoint == EP_PLAY && !cfg.playback_delay.is_zero() {
+                    // Capture is in flight (24 ms queued), so a short wait loses nothing;
+                    // its completions wait for the event thread.
+                    std::thread::sleep(cfg.playback_delay);
+                }
                 for _ in 0..count {
                     let t = ffi::libusb_alloc_transfer(packets as c_int);
                     let mut buf = vec![0u8; MAX_PACKET * packets];

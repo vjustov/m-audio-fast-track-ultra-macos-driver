@@ -530,7 +530,8 @@ mod tests {
         for rate in RATES {
             let mut seen = Vec::new();
             for cap_ms in 0..4 {
-                for play_ms in 0..4 {
+                // 10: playback started after capture, as the daemon does (PLAYBACK_DELAY).
+                for play_ms in [0, 1, 2, 3, 10, 13] {
                     let mut s = Sim::start_at(rate, SUBMIT_AHEAD + 8 * cap_ms, SUBMIT_AHEAD + 8 * play_ms);
                     s.run_ms(1000);
                     seen.push(s.rt_values(500 * 8, 1000 * 8)[0]);
