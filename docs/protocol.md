@@ -164,6 +164,8 @@ Linux uses control 7 on the same unit. The Mac driver uses control 2. Settle on 
 
 Created in the device constructor D:`0x567cc` next to unit 7. `InitializeHardware` D:`0x5c7b8` sets every channel of both to 0 dB at startup. Their purpose is unknown. They are likely DAW playback and capture trims.
 
+Second pass (2026-10-25): `SendVolumeRequest` D:`0x23db0` has two callers only, `InitializeHardware` (units 8 and 9 to 0 dB) and `SendFXReturnsLevels` (unit 7). The vendor stack never changes units 8 or 9 after startup and exposes no control for them. Its output faders are folded into the unit 5 matrix gains instead (`CalcMixerNodeDB`). Our daemon drives unit 9 for the output faders, which the vendor never does. Observed.
+
 ### Meters and device status
 
 `GetMixerData` K:`0xd66` assembly and `FetchMeters` D:`0x5ccf8` (observed):
@@ -185,7 +187,7 @@ Reply layout: 27 signed 16-bit little-endian words. `LMeters::StoreInCache` D:`0
 | 0 to 7 | Hardware inputs 1 to 8 (analog 1 to 6, S/PDIF L/R) | Inferred from cache layout |
 | 8 to 15 | DAW returns 1 to 8 | Inferred |
 | 16 to 23 | Outputs 1 to 8 | Inferred |
-| 24 to 25 | Effect return L/R (inferred). Read 0 with reverb active on hardware, so likely wrong. | Inferred, contradicted |
+| 24 to 25 | Effect return L/R. `StoreInCache` D:`0x585e2` writes words 24 and 25 to the effect return meter parameters (+6, +7 of `LFXReturns`) of every output pair, and words 16 to 23 to the output pair meters. They read 0 with reverb active on hardware, so either the device fills them only in some state or the vendor panel showed zero too. | Mapping observed; values contradicted on hardware |
 | 26 | Device status word | Observed (`FetchDeviceStatus` D:`0x5cd40`) |
 
 Status word bits:
@@ -193,12 +195,21 @@ Status word bits:
 | Bits | Meaning | Source |
 | --- | --- | --- |
 | 0 | Current power mode. Set means mode 0. | D:`0x5b91e` |
-| 1 | Startup power mode. Set means mode 0. | D:`0x5b8e0` |
+| 1 | Startup power mode: the power source the device started with. Set means mode 0 (PSU). The panel disables channels with "your Fast Track Ultra was started with bus power. For full functionality, power cycle" when bit 1 says bus and bit 0 says PSU, so the 4×4 limit holds until a power cycle. | D:`0x5b8e0`, panel `StringTables.xml` |
 | 8 to 9 | Device sample rate: 0 = 44.1, 1 = 48, 2 = 88.2, 3 = 96 kHz | K:`0xdb2`, K:`0xe52` |
 | 12 | Set means the external clock is not valid | K:`0xe52` |
 | 13 | Watched by the daemon timer, which posts a notification when it changes. Meaning unknown. | D:`0x5c1f2` |
 
-Power mode 1 = bus powered, 0 = PSU (see Hardware observations). Power mode is read-only: `LPowerMode` rejects writes (D:`0x4fdd8`).
+Power mode 1 = bus powered, 0 = PSU (see Hardware observations). Power mode is read-only: `LPowerMode` rejects writes (D:`0x4fdd8`). `SetCurrentPowerMode` and `SetStartupPowerMode` (D:`0x5ba3a`, `0x5bac4`) only update cached parameters and send nothing to the device. The timer (D:`0x5c1f2`) re-reads both modes and posts a change when either differs from the cache. It checks bit 13 only while a root setting (parameter 6) equals 1, likely external clock. Observed; the parameter 6 meaning is inferred.
+
+The control panel's messages match the manual: "External clock not detected. Sample rate fixed at 48 kHz." (C4), "Hardware Connected" / "Hardware Not Connected" (M4), and "Clock Rate Mismatch". Some panel strings (Word Clock, LLM) come from a shared M-Audio framework and do not apply to this device.
+
+### Effect return bypass and FX sends mode
+
+- **Bypass (X8).** The manual's Bypass button sits on the Monitor 1/2 and 3/4 tabs (p.11). In the daemon it belongs to `LFXReturns`, which has six local parameters plus the two meter slots. Only the instances for output pairs 1/2 and 3/4 talk to hardware (flag set in `SetFirstParamID` D:`0x3f9cc` when the parent index is 0 or 1). Their only device request is the unit 7 return level (`SendFXReturnsLevels` D:`0x5c9a2`), computed by `CalcSingleFXReturnDB` D:`0x40048`. No bypass request exists, and no "bypass" string appears anywhere in the Mac package. Bypass is host-side: the return level goes to off. Our daemon's approach is the same. Which of the six parameters is bypass was not resolved.
+- **Unit 7 encoding.** `SendFXReturnsLevels` converts with `ConvertToFirmwareLevel`, the same dB × 256 encoding as unit 5 (maximum 0 dB, OFF = -32768). Channels are 2 × pair and 2 × pair + 1 of the output pair. Observed.
+- **FX sends mode.** The 2.3.3 panel's Settings drawer has "FX Sends Mode" with "Pre-Fader" and "Post-Fader (Mix 1/2)" (`comboBoxPreOrPostFXSends`). The manual does not mention it. `LFXSends8` (two instances: hardware inputs and software returns) has eight send levels and a ninth parameter whose change resends all eight (`SetParamValueLocal` D:`0x417a8`). The send request itself is unit 5 control 9 (`SendFXSendsLevel` D:`0x5cae8`). Where post-fader scaling is computed (daemon or panel) was not found.
+- **Effect settings per program.** `LFXBus` has two parameters: the program and a child `LEffectSettings` per program (`GetEffectSettings` D:`0x3f0e6`). On a change it sends the program, then that program's three settings as effect selectors 2, 3 and 1 (`SendPhysicalParams` D:`0x3da62`). So the vendor remembers duration, feedback and level separately for each program and restores them when the program changes. Observed.
 
 Polling: the kext reads this block every 1,000 ms (K:`0xe52`). The daemon also polls it on its own timer for meters.
 
@@ -242,6 +253,9 @@ There is no alternate setting 2 at full speed, so external clock is unavailable 
 - AC-3 is a host-side stream format (`'cac3'`) on the same alternate setting 1. K:`0x17fe`, K:`0x1890`, K:`0x1f32`
 - Selecting it makes the kext re-apply its clock settings (`SetAC3State` K:`0x10fa`).
 - The daemon saves the mixer state and switches the output pairs into AC-3 mode (`SetIsInAC3Mode` D:`0x5bcb2`). No AC-3-specific USB request was found.
+- Second pass (2026-10-25). The format is 2 channels, 16 bits, 1536 frames per packet (`AddAc3Format` K:`0x17fe`), so Core Audio hands over IEC 61937 bursts as 16-bit stereo. `TransferAudioAC3Perform` K:`0xdf5a` writes each 16-bit word into the last two channels of the 8-channel frame (S/PDIF L/R). In 24-bit mode the word goes into the top 16 bits and the low byte is 0, with a byte-swapped variant for big-endian sources. The other six channels are not written, which is why analog I/O goes silent. Observed.
+- For our driver this means: an extra output stream format (AC-3 over S/PDIF, 16-bit stereo, not mixable) in the plugin, and a daemon path that packs those words into channels 7/8 unchanged. The device mixer must then route DAW 7/8 to S/PDIF out at exactly 0 dB with nothing else mixed in, or the bitstream breaks. That is the likely purpose of `SetIsInAC3Mode` (inferred).
+- Bus-powered 4×4 mode (M1) uses the same high-speed alternate settings as normal mode: the table has a single 8-channel format per interface. So the streaming format does not change; the device and the panel disable channels. Observed in `kHighSpeedAltInfo`.
 
 ### Version readout
 
@@ -304,6 +318,46 @@ node_dB = 20 * log10( 10^((a + c) / 20) + 10^((b + d) / 20) )
 - The node dB then goes through `ConvertToFirmwareLevel` to the unit 5 request.
 
 - **No-op features:** tuner, dim, mono, low-latency monitoring and button settings are stubs on this device (D:`0x5b886` to `0x5b8d6`, 10 bytes each).
+
+### Streaming engine
+
+Second kext pass (2026-10-25), aimed at how the engine starts, switches rate, reports latency and recovers. Classes: `MaudioShDrRipleyUsbInterfaceAsyncLinkedRead` (capture, "ALR") and `MaudioShDrRipleyUsbInterfaceAsyncLinkedWrite` (playback, "ALW"). Constants read from `__TEXT,__const`.
+
+**Rate change.**
+- `Interface::SetSampleRate` K:`0x48f0` refuses while the interface is streaming ("Can't Interface::SetSampleRate while streaming"). The rate is only sent while stopped. Observed.
+- `CommonConfigureSteps` K:`0x8098` selects alternate setting 0, then the streaming alternate setting, then sets the rate, then configures each stream. Same order as our daemon. Inferred from vtable slots.
+- No settle delay, status poll or discarded packets after the rate request were found in that path.
+
+**Start.**
+- Capture starts first. Playback starts `kInitialInputFramesToSkip` = **10 USB frames (10 ms)** later: ALW `Start` K:`0xeac6` sets its first frame to the capture start frame + 10. `GetUsbFrameNumberStart` K:`0x1754` also returns now + 10. Observed.
+- ALR queues 20 frame lists (`kFrameListsToQueue`) of 2 frames each (`kFramesPerFrameList`), in a ring of 200 lists. ALW queues 10 lists of 4 frames. Observed constants; the 1 ms frame unit is inferred.
+
+**Implicit feedback.**
+- ALW sizes each playback packet from ALR's actual-count array (`GetReadActCountArray` K:`0xcb2e`), indexed by position in the frame ring, so a playback packet is tied to the capture packet of a fixed USB frame offset. Our daemon pairs them in arrival order instead. Observed in `UsbFrameListInit` K:`0xda8a`.
+- Until capture counts exist, ALW sends nominal sizes from a fractional accumulator and keeps their count and sum. Once counts arrive it sums the actual sizes over the same number of packets, divides the difference by the frame size, and corrects it **one frame per packet** (adds or removes a frame while the packet stays under the maximum size) until it reaches zero. Then it copies the capture sizes unchanged. Observed (state machine at `+0x244`).
+- If capture and playback frame sizes differ, ALW scales the count by the ratio. Observed.
+- A capture packet with zero length is filled with nominal-size silence, so the capture timeline never loses frames (`CopyInputFrames` K:`0xd0d0`). Observed. Our daemon skips failed packets.
+
+**Timestamps.**
+- The first zero timestamp is the first capture list's USB timestamp minus 1 ms (`TakeFirstTimeStamp` K:`0x41da`). Later ones are the completion timestamp of the list where the ring wraps, minus the share of that list after the wrap point (`BufferWrapped` K:`0x422a`). The kext uses USB frame timestamps, not callback times. Observed.
+
+**Reported latency.** `FinalizeLatencySettings` K:`0x8c8a` picks a row by latency setting (default 1) and rate from `kHighSpeedSampleLatencyAndOffset`, and passes three values to the IOAudioEngine: field 2 likely as the sample offset, fields 3 and 4 as input and output latency (which is which is inferred; they are equal). Field 2 also goes to `SetLeadFrames`.
+
+| Rate | Field 2 (offset) | Fields 3 / 4 (latency) | In + out |
+| --- | --- | --- | --- |
+| 44.1 kHz | 88 (2.0 ms) | 28 / 28 | 56 |
+| 48 kHz | 96 (2.0 ms) | 28 / 28 | 56 |
+| 88.2 kHz | 176 (2.0 ms) | 43 / 43 | 86 |
+| 96 kHz | 192 (2.0 ms) | 45 / 45 | 90 |
+
+Full speed (USB 1.1) rows: 48 kHz 120, 109, 109; 44.1 kHz 110, 105, 105. Our measured round trips after a clean start (2026-10-25): 62.9 at 44.1 and 48, 85.8 at 88.2, 90.8 at 96 kHz. The kext's sums match at 88.2 and 96 kHz and are 7 frames lower at 44.1 and 48 kHz.
+
+**External rate following.** `UsbEngine::SetSampleRateFromUsbFrameListHandler` K:`0x9686` reconfigures the engine to a new `ExternalSampleRate` on a work-loop thread, guarded by an atomic so only one change runs. The capture interface is marked primary for these changes (`SetPrimaryInterfaceForExternalSampleRateChanges` K:`0x1ca0`). The caller is virtual and was not found, so what triggers it is open. On S/PDIF clock the rates offered to Core Audio come from status bits 8 to 9 (`GetDeviceSampleRate` K:`0xdb2`, called by the configuration and min/max rate getters). Choosing a clock source reconfigures the engine (`SetDeviceClockSource` K:`0xfa0`). `UcGetExternalClockStatus` is a stub returning `kIOReturnUnsupported` in this build. Observed.
+
+**Sleep, unplug and errors.**
+- `performPowerStateChange` K:`0xa94` acts only on the transition to sleep: it calls one engine method and one device method (likely stop and deactivate; vtable slots not resolved). Nothing runs on wake; the IOAudioFamily restarts engines when clients resume. Inferred.
+- `requestTerminate` K:`0x6390` (unplug) calls `SignalDeviceError` K:`0x633c`, which stores the error and notifies the user client so the vendor daemon learns of it.
+- An isochronous submit that fails with `0xe00002ee` (the error our daemon logged while coreaudiod spun) calls `ReportHardwareError` K:`0x83b8`, which also goes to `SignalDeviceError`. `kMaxReadRetries` = 10. Observed.
 
 ## Hardware observations
 
@@ -441,12 +495,13 @@ Test: 5-pin cable from MIDI Out to MIDI In, CoreMIDI scripts in `proto/midi_*.sw
 
 - Bit 12 behavior with a truly absent S/PDIF signal (see Clock tests)
 - C4 fallback to 48 kHz with no external signal
-- Meaning of meter words 24 and 25
-- Meaning of status bit 1 ("startup power mode"). It tracked bit 0 on a live PSU change.
-- DSP bypass. No dedicated request found. Possibly done by zeroing effect returns.
-- Unit 8 purpose (needs streaming). Unit 9 channels other than 3
+- Meter words 24 and 25: the vendor maps them to the effect return meters, but they read 0 on hardware with reverb active. Retest with the return level up.
+- Status bit 1 is the startup power source (panel text). It tracked bit 0 on a live PSU change here, which the panel text does not expect. Retest: start on bus power, then plug the PSU.
+- Unit 8 purpose (needs streaming). Unit 9 channels other than 3. The vendor never changes either after startup.
+- FX sends mode (pre/post fader): where the post-fader scaling happens.
+- Which `LFXReturns` parameter is the bypass switch.
 - Exact mapping of channel and balance array elements in `CalcSingleMixerNodeDB`
-- Native range for unit 5 is -128 to 0 dB (confirmed). Unit 7 range unknown
+- Native range for unit 5 is -128 to 0 dB (confirmed). Unit 7 uses the same encoding in the vendor daemon (see Effect return bypass); its native range is not confirmed on hardware.
 
 ---
 
