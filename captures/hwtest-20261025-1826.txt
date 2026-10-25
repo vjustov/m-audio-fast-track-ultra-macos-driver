@@ -1,0 +1,205 @@
+hwtest 20261025-1826, loop output 1 -> input 1
+PASS  daemon: status {
+  "clock": "internal",
+  "clock_locked": null,
+  "connected": true,
+  "driver": "0.1.0",
+  "firmware": "1.51",
+  "port": "USB 2.0",
+  "power": "psu",
+  "sample_rate": 48000,
+  "startup_power": "psu",
+  "streaming": true
+}
+PASS  coreaudiod idle (before): 0.0% CPU
+PASS  loopback: 62.97 frames at 48 kHz
+channel map, outputs 1-6 to inputs 1-6:
+  channel 1: 62.97 frames
+  channel 2: 62.97 frames
+FAIL  channel 3: output 3 -> input 3: no burst came back (gains [0.0, -0.0]): check the loop and the device
+  channel 4: 62.96 frames
+  channel 5: 61.89 frames
+  channel 6: 61.96 frames
+FAIL  channel map 1-6: round trips 61.89 to 62.97 frames
+rate matrix, playback delay 0 ms (vendor-style delay off):
+   48000 ->  44100:   61.94 frames, unreported  -0.06
+   88200 ->  44100:   72.94 frames, unreported  10.94
+   96000 ->  44100:   70.95 frames, unreported   8.95
+   44100 ->  48000:   62.98 frames, unreported  -0.02
+   88200 ->  48000:   67.98 frames, unreported   4.98
+   96000 ->  48000:   66.98 frames, unreported   3.98
+   44100 ->  88200:   85.78 frames, unreported  -0.22
+   48000 ->  88200:   85.78 frames, unreported  -0.22
+   96000 ->  88200:   86.78 frames, unreported   0.78
+   44100 ->  96000:   90.82 frames, unreported  -0.18
+   48000 ->  96000:   89.82 frames, unreported  -1.18
+   88200 ->  96000:   89.82 frames, unreported  -1.18
+   48000 ->  44100:   57.95 frames, unreported  -4.05
+   88200 ->  44100:   69.95 frames, unreported   7.95
+   96000 ->  44100:   71.94 frames, unreported   9.94
+   44100 ->  48000:   62.97 frames, unreported  -0.03
+   88200 ->  48000:   68.97 frames, unreported   5.97
+   96000 ->  48000:   67.97 frames, unreported   4.97
+   44100 ->  88200:   85.78 frames, unreported  -0.22
+   48000 ->  88200:   85.78 frames, unreported  -0.22
+   96000 ->  88200:   87.78 frames, unreported   1.78
+   44100 ->  96000:   90.82 frames, unreported  -0.18
+   48000 ->  96000:   89.82 frames, unreported  -1.18
+   88200 ->  96000:   90.82 frames, unreported  -0.18
+FAIL  delay 0: round trip at 44100 Hz repeats: 57.95 to 72.94 frames
+FAIL  delay 0: round trip at 48000 Hz repeats: 62.97 to 68.97 frames
+FAIL  delay 0: round trip at 88200 Hz repeats: 85.78 to 87.78 frames
+PASS  delay 0: round trip at 96000 Hz repeats: 89.82 to 90.82 frames
+FAIL  delay 0: reported latency matches: worst unreported 10.94 frames
+rate matrix, playback delay 10 ms:
+   48000 ->  44100:   57.95 frames, unreported  -4.05
+   88200 ->  44100:   68.95 frames, unreported   6.95
+   96000 ->  44100:   70.95 frames, unreported   8.95
+   44100 ->  48000:   62.97 frames, unreported  -0.03
+   88200 ->  48000:   68.97 frames, unreported   5.97
+   96000 ->  48000:   70.31 frames, unreported   7.31
+   44100 ->  88200:   85.78 frames, unreported  -0.22
+   48000 ->  88200:   85.78 frames, unreported  -0.22
+   96000 ->  88200:   87.78 frames, unreported   1.78
+   44100 ->  96000:   90.83 frames, unreported  -0.17
+   48000 ->  96000:   90.82 frames, unreported  -0.18
+   88200 ->  96000:   91.83 frames, unreported   0.83
+   48000 ->  44100:   61.94 frames, unreported  -0.06
+   88200 ->  44100:   71.94 frames, unreported   9.94
+   96000 ->  44100:   70.94 frames, unreported   8.94
+   44100 ->  48000:   63.98 frames, unreported   0.98
+   88200 ->  48000:   67.97 frames, unreported   4.97
+   96000 ->  48000:   69.97 frames, unreported   6.97
+   44100 ->  88200:   86.78 frames, unreported   0.78
+   48000 ->  88200:   85.78 frames, unreported  -0.22
+   96000 ->  88200:   86.78 frames, unreported   0.78
+   44100 ->  96000:   90.83 frames, unreported  -0.17
+   48000 ->  96000:   91.82 frames, unreported   0.82
+   88200 ->  96000:   91.82 frames, unreported   0.82
+FAIL  delay 10: round trip at 44100 Hz repeats: 57.95 to 71.94 frames
+FAIL  delay 10: round trip at 48000 Hz repeats: 62.97 to 70.31 frames
+FAIL  delay 10: round trip at 88200 Hz repeats: 85.78 to 87.78 frames
+FAIL  delay 10: round trip at 96000 Hz repeats: 90.82 to 91.83 frames
+FAIL  delay 10: reported latency matches: worst unreported 9.94 frames
+stall recovery (soak 1.5 min, three 20 ms stalls):
+  stall 20 ms injected
+  stall 20 ms injected
+  stall 20 ms injected
+  glitch at 4.149 s (18:34:15.273): dropout (933 zero samples), phase jump +10.5 samples
+  glitch at 4.169 s (18:34:15.292): dropout (933 zero samples), phase jump +14.8 samples
+  glitch at 4.220 s (18:34:15.344): phase jump, phase jump -14.7 samples
+  glitch at 4.240 s (18:34:15.363): phase jump, phase jump +14.8 samples
+  glitch at 19.859 s (18:34:30.983): dropout (4 zero samples), phase jump -12.9 samples
+  glitch at 19.902 s (18:34:31.026): dropout (2048 zero samples), phase jump +13.2 samples
+  glitch at 19.999 s (18:34:31.123): dropout (2048 zero samples), phase jump -0.2 samples
+  glitch at 20.789 s (18:34:31.912): phase jump, phase jump -4.1 samples
+  glitch at 31.381 s (18:34:42.504): dropout (1016 zero samples), phase jump -2.2 samples
+  glitch at 31.402 s (18:34:42.526): dropout (1016 zero samples), phase jump +3.1 samples
+  glitch at 31.451 s (18:34:42.575): phase jump, phase jump -8.2 samples
+  glitch at 31.473 s (18:34:42.596): phase jump, phase jump +9.1 samples
+  glitch at 38.634 s (18:34:49.758): dropout (1021 zero samples), phase jump -16.5 samples
+  glitch at 38.655 s (18:34:49.779): dropout (1021 zero samples), phase jump -18.3 samples
+  glitch at 38.705 s (18:34:49.828): phase jump, phase jump +13.6 samples
+  glitch at 38.726 s (18:34:49.849): phase jump, phase jump -18.6 samples
+  glitch at 39.949 s (18:34:51.072): phase jump, phase jump +8.1 samples
+  glitch at 39.998 s (18:34:51.122): phase jump, phase jump -3.0 samples
+  glitch at 40.156 s (18:34:51.280): phase jump, phase jump -6.3 samples
+  glitch at 45.546 s (18:34:56.669): dropout (1018 zero samples), phase jump -15.2 samples
+  glitch at 45.567 s (18:34:56.691): dropout (1018 zero samples), phase jump -19.6 samples
+  glitch at 45.616 s (18:34:56.740): phase jump, phase jump +9.3 samples
+  glitch at 45.638 s (18:34:56.761): phase jump, phase jump +21.6 samples
+  glitch at 45.844 s (18:34:56.968): dropout (1019 zero samples), phase jump +8.8 samples
+  glitch at 45.866 s (18:34:56.989): dropout (1019 zero samples), phase jump +4.6 samples
+  glitch at 45.915 s (18:34:57.039): phase jump, phase jump +18.7 samples
+  glitch at 45.936 s (18:34:57.060): phase jump, phase jump +14.4 samples
+  glitch at 52.244 s (18:35:03.368): dropout (1028 zero samples), phase jump -16.7 samples
+  glitch at 52.266 s (18:35:03.389): dropout (1028 zero samples), phase jump -18.0 samples
+  glitch at 52.315 s (18:35:03.439): phase jump, phase jump -1.3 samples
+  glitch at 52.336 s (18:35:03.460): phase jump, phase jump -18.3 samples
+  glitch at 52.799 s (18:35:03.923): dropout (1029 zero samples), phase jump -4.3 samples
+  glitch at 52.821 s (18:35:03.944): dropout (1029 zero samples), phase jump +16.9 samples
+  glitch at 52.870 s (18:35:03.993): phase jump, phase jump -18.8 samples
+  glitch at 52.891 s (18:35:04.015): phase jump, phase jump -7.7 samples
+  t=    1 min  input  -50.5 dBFS  glitches 36 (total 36)  overloads 1  restarts 1  rate 47994.3 Hz
+  glitch at 59.960 s (18:35:11.084): phase jump, phase jump +6.9 samples
+  glitch at 60.017 s (18:35:11.140): phase jump, phase jump -0.9 samples
+  glitch at 60.383 s (18:35:11.507): phase jump, phase jump -5.2 samples
+  glitch at 60.991 s (18:35:12.115): dropout (1023 zero samples), phase jump -12.4 samples
+  glitch at 61.012 s (18:35:12.136): dropout (1023 zero samples), phase jump -22.5 samples
+  glitch at 61.062 s (18:35:12.185): phase jump, phase jump -12.4 samples
+  glitch at 61.083 s (18:35:12.207): phase jump, phase jump -8.9 samples
+  glitch at 61.330 s (18:35:12.454): phase jump, phase jump -1.2 samples
+  glitch at 70.634 s (18:35:21.757): dropout (1011 zero samples), phase jump +14.0 samples
+  glitch at 70.655 s (18:35:21.778): dropout (1011 zero samples), phase jump -1.1 samples
+  glitch at 70.704 s (18:35:21.828): phase jump, phase jump +3.1 samples
+  glitch at 70.726 s (18:35:21.849): phase jump, phase jump +8.9 samples
+  t=    2 min  input  -50.5 dBFS  glitches 11 (total 47)  overloads 1  restarts 1  rate 48000.5 Hz
+  done: 47 glitches, 1 overloads in 1 min
+FAIL  stalls: one lead jump each: 16 lead jumps
+FAIL  stalls: at most one glitch each: 47 glitches
+soak (5 min):
+  glitch at 27.317 s (18:36:42.414): dropout (1033 zero samples), phase jump -5.8 samples
+  glitch at 27.339 s (18:36:42.435): dropout (1033 zero samples), phase jump +18.4 samples
+  glitch at 27.388 s (18:36:42.484): phase jump, phase jump -11.2 samples
+  glitch at 27.409 s (18:36:42.506): phase jump, phase jump +4.4 samples
+  t=    1 min  input  -50.5 dBFS  glitches 4 (total 4)  overloads 0  restarts 1  rate 47990.3 Hz
+  t=    2 min  input  -50.5 dBFS  glitches 0 (total 4)  overloads 0  restarts 1  rate 47982.0 Hz
+  glitch at 157.493 s (18:38:52.590): dropout (1018 zero samples), phase jump -15.2 samples
+  glitch at 157.515 s (18:38:52.611): dropout (1018 zero samples), phase jump -19.6 samples
+  glitch at 157.564 s (18:38:52.660): phase jump, phase jump +1.7 samples
+  glitch at 157.585 s (18:38:52.682): phase jump, phase jump -23.2 samples
+  glitch at 178.272 s (18:39:13.368): dropout (1015 zero samples), phase jump -18.2 samples
+  glitch at 178.293 s (18:39:13.389): dropout (1015 zero samples), phase jump -16.6 samples
+  glitch at 178.342 s (18:39:13.439): phase jump, phase jump -4.8 samples
+  glitch at 178.364 s (18:39:13.460): phase jump, phase jump -6.1 samples
+  glitch at 179.466 s (18:39:14.563): dropout (1018 zero samples), phase jump -9.4 samples
+  glitch at 179.488 s (18:39:14.584): dropout (1018 zero samples), phase jump +23.3 samples
+  glitch at 179.537 s (18:39:14.633): phase jump, phase jump +23.2 samples
+  glitch at 179.558 s (18:39:14.655): phase jump, phase jump +3.0 samples
+  t=    3 min  input  -50.5 dBFS  glitches 12 (total 16)  overloads 0  restarts 1  rate 47999.8 Hz
+  glitch at 195.680 s (18:39:30.776): dropout (1022 zero samples), phase jump +18.2 samples
+  glitch at 195.701 s (18:39:30.797): dropout (1022 zero samples), phase jump -5.6 samples
+  glitch at 195.750 s (18:39:30.847): phase jump, phase jump -10.7 samples
+  glitch at 195.772 s (18:39:30.868): phase jump, phase jump -5.3 samples
+  glitch at 204.768 s (18:39:39.864): dropout (1021 zero samples), phase jump -4.3 samples
+  glitch at 204.789 s (18:39:39.885): dropout (1021 zero samples), phase jump +16.9 samples
+  glitch at 204.838 s (18:39:39.935): phase jump, phase jump -23.0 samples
+  glitch at 204.859 s (18:39:39.956): phase jump, phase jump +11.5 samples
+  glitch at 219.402 s (18:39:54.499): dropout (1023 zero samples), phase jump +20.1 samples
+  glitch at 219.423 s (18:39:54.520): dropout (1023 zero samples), phase jump -7.5 samples
+  glitch at 219.473 s (18:39:54.569): phase jump, phase jump -7.5 samples
+  glitch at 219.494 s (18:39:54.591): phase jump, phase jump -7.9 samples
+  glitch at 221.834 s (18:39:56.931): dropout (1030 zero samples), phase jump -0.8 samples
+  glitch at 221.856 s (18:39:56.952): dropout (1030 zero samples), phase jump +13.5 samples
+  glitch at 221.905 s (18:39:57.001): phase jump, phase jump +17.5 samples
+  glitch at 221.926 s (18:39:57.023): phase jump, phase jump -5.9 samples
+  glitch at 222.773 s (18:39:57.869): dropout (1012 zero samples), phase jump +19.3 samples
+  glitch at 222.794 s (18:39:57.890): dropout (1012 zero samples), phase jump -6.8 samples
+  glitch at 222.843 s (18:39:57.940): blip, phase jump -0.3 samples
+  glitch at 222.865 s (18:39:57.961): phase jump, phase jump +12.0 samples
+  t=    4 min  input  -50.5 dBFS  glitches 20 (total 36)  overloads 0  restarts 1  rate 48000.3 Hz
+  glitch at 271.626 s (18:40:46.722): dropout (1036 zero samples), phase jump -4.9 samples
+  glitch at 271.648 s (18:40:46.744): dropout (1036 zero samples), phase jump +17.5 samples
+  glitch at 271.697 s (18:40:46.793): phase jump, phase jump +7.2 samples
+  glitch at 271.718 s (18:40:46.815): phase jump, phase jump +22.4 samples
+  glitch at 279.861 s (18:40:54.957): dropout (1022 zero samples), phase jump +10.2 samples
+  glitch at 279.882 s (18:40:54.979): dropout (1022 zero samples), phase jump +3.1 samples
+  glitch at 279.932 s (18:40:55.028): phase jump, phase jump -14.4 samples
+  glitch at 279.953 s (18:40:55.049): phase jump, phase jump +22.6 samples
+  glitch at 280.757 s (18:40:55.853): dropout (1025 zero samples), phase jump +8.2 samples
+  glitch at 280.778 s (18:40:55.875): dropout (1025 zero samples), phase jump +5.2 samples
+  glitch at 280.828 s (18:40:55.924): phase jump, phase jump +21.8 samples
+  glitch at 280.849 s (18:40:55.945): phase jump, phase jump -3.0 samples
+  glitch at 291.765 s (18:41:06.861): dropout (1029 zero samples), phase jump +21.9 samples
+  glitch at 291.786 s (18:41:06.883): dropout (1029 zero samples), phase jump -9.3 samples
+  glitch at 291.836 s (18:41:06.932): phase jump, phase jump -9.9 samples
+  glitch at 291.857 s (18:41:06.953): phase jump, phase jump -10.7 samples
+  t=    5 min  input  -50.5 dBFS  glitches 16 (total 52)  overloads 0  restarts 1  rate 48000.3 Hz
+  done: 52 glitches, 0 overloads in 5 min
+FAIL  soak: no glitches: 52 glitches, 0 overloads
+FAIL  soak: no lead jumps or USB errors: 19 lead jumps, 0 USB error lines
+  note: 321396 out-of-pattern capture packets, first: ftu-daemon: 18:36:15.050 capture packet of 7 frames at 6129427
+PASS  coreaudiod idle (after): 17.7% CPU
+
+5 passed, 15 failed: channel 3: output 3 -> input 3; channel map 1-6; delay 0: round trip at 44100 Hz repeats; delay 0: round trip at 48000 Hz repeats; delay 0: round trip at 88200 Hz repeats; delay 0: reported latency matches; delay 10: round trip at 44100 Hz repeats; delay 10: round trip at 48000 Hz repeats; delay 10: round trip at 88200 Hz repeats; delay 10: round trip at 96000 Hz repeats; delay 10: reported latency matches; stalls: one lead jump each; stalls: at most one glitch each; soak: no glitches; soak: no lead jumps or USB errors
+log: /Users/vjustov/code/m-audio-interface-firmware/captures/hwtest-20261025-1826.txt

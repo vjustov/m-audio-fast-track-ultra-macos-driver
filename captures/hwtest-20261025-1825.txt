@@ -1,0 +1,6 @@
+hwtest 20261025-1825, loop output 1 -> input 1
+FAIL  looped inputs muted in the mix: audible: [(1, 2)] (bus, input); mute them first
+PASS  coreaudiod idle (after): 0.0% CPU
+
+1 passed, 1 failed: looped inputs muted in the mix
+log: /Users/vjustov/code/m-audio-interface-firmware/captures/hwtest-20261025-1825.txt
