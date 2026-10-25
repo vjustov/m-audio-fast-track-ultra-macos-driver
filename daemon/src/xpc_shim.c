@@ -4,7 +4,7 @@
 //   {"op": "hello"}                -> {"version": FTU_SHM_VERSION, "shm": <xpc_shmem of the region>}
 //   {"op": "set_rate", "rate": Hz} -> {"ok": bool}. The stream restarts at the new rate;
 //                                     the client watches shm sample_rate and generation.
-//   {"op": "ctl", "request": JSON}  -> {"response": JSON}. Mixer control, see ctl.rs.
+//   {"op": "ctl", "request": JSON}  -> {"response": JSON}. Mixer control, see ctl/api.rs.
 // Only coreaudiod's user (_coreaudiod) and the daemon's own user may connect.
 
 #include <dispatch/dispatch.h>
@@ -24,10 +24,11 @@ static xpc_connection_t g_listener;
 // to disk (the service loop does the USB writes), but coreaudiod's hello and set_rate
 // should never queue behind a file write.
 static dispatch_queue_t g_ctl_queue;
+static const void* g_ctl_ctx;  // the daemon's Control, passed back to ftu_ctl_request
 static _Atomic uint32_t g_requested_rate;
 
-// Implemented in Rust (ctl.rs).
-char* ftu_ctl_request(const char* request);
+// Implemented in Rust (ctl/mod.rs).
+char* ftu_ctl_request(const void* ctx, const char* request);
 void ftu_ctl_free(char* reply);
 
 static int valid_rate(uint64_t r) {
@@ -66,7 +67,7 @@ static void handle_message(xpc_connection_t peer, xpc_object_t msg) {
         xpc_retain(peer);
         xpc_retain(msg);
         dispatch_async(g_ctl_queue, ^{
-            char* response = ftu_ctl_request(xpc_dictionary_get_string(msg, "request"));
+            char* response = ftu_ctl_request(g_ctl_ctx, xpc_dictionary_get_string(msg, "request"));
             xpc_dictionary_set_string(reply, "response", response);
             ftu_ctl_free(response);
             xpc_connection_send_message(peer, reply);
@@ -107,9 +108,10 @@ static void handle_peer(xpc_object_t obj) {
 
 // Starts listening on the launchd-registered Mach service `name`.
 // Returns 0 on success. Handlers run on a dispatch queue owned by XPC.
-int ftu_xpc_listen(const char* name, void* addr, size_t len) {
+int ftu_xpc_listen(const char* name, void* addr, size_t len, const void* ctl) {
     g_addr = addr;
     g_len = len;
+    g_ctl_ctx = ctl;
     dispatch_queue_t q = dispatch_queue_create("ftu.xpc", DISPATCH_QUEUE_SERIAL);
     g_ctl_queue = dispatch_queue_create("ftu.xpc.ctl", DISPATCH_QUEUE_SERIAL);
     g_listener = xpc_connection_create_mach_service(name, q, XPC_CONNECTION_MACH_SERVICE_LISTENER);
