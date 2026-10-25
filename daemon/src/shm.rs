@@ -58,6 +58,48 @@ pub struct Shm {
 // Must match sizeof(ftu_shm_t). Header is 216 bytes.
 const _: () = assert!(std::mem::size_of::<Shm>() == 216 + 2 * RING_SAMPLES * 4);
 
+/// The stream health counters, read together. All count since the stream started.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Counters {
+    pub play_underruns: u64,
+    pub usb_errors: u64,
+    pub plugin_late_writes: u64,
+    pub plugin_short_reads: u64,
+    pub plugin_input_jumps: u64,
+    pub plugin_output_jumps: u64,
+    pub lead_frames_added: u64,
+    pub lead_frames_dropped: u64,
+    pub lead_jumps: u64,
+    pub fallback_packets: u64,
+    pub capture_errors: u64,
+    pub playback_errors: u64,
+    pub fifo_overflows: u64,
+    pub callback_stalls: u64,
+}
+
+impl std::fmt::Display for Counters {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "playback underruns {}, usb errors {}, plugin late writes {}, short reads {}, input jumps {}, output jumps {}, lead frames added {}, dropped {}, lead jumps {}, fallback packets {}, capture errors {}, playback errors {}, fifo overflows {}, stalls {}",
+            self.play_underruns,
+            self.usb_errors,
+            self.plugin_late_writes,
+            self.plugin_short_reads,
+            self.plugin_input_jumps,
+            self.plugin_output_jumps,
+            self.lead_frames_added,
+            self.lead_frames_dropped,
+            self.lead_jumps,
+            self.fallback_packets,
+            self.capture_errors,
+            self.playback_errors,
+            self.fifo_overflows,
+            self.callback_stalls
+        )
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct ClockAnchor {
     pub sample_time: u64,
@@ -127,6 +169,26 @@ impl Drop for ShmRegion {
 }
 
 impl Shm {
+    pub fn counters(&self) -> Counters {
+        let r = |c: &AtomicU64| c.load(Ordering::Relaxed);
+        Counters {
+            play_underruns: r(&self.play_underruns),
+            usb_errors: r(&self.usb_errors),
+            plugin_late_writes: r(&self.plugin_late_writes),
+            plugin_short_reads: r(&self.plugin_short_reads),
+            plugin_input_jumps: r(&self.plugin_input_jumps),
+            plugin_output_jumps: r(&self.plugin_output_jumps),
+            lead_frames_added: r(&self.lead_frames_added),
+            lead_frames_dropped: r(&self.lead_frames_dropped),
+            lead_jumps: r(&self.lead_jumps),
+            fallback_packets: r(&self.fallback_packets),
+            capture_errors: r(&self.capture_errors),
+            playback_errors: r(&self.playback_errors),
+            fifo_overflows: r(&self.fifo_overflows),
+            callback_stalls: r(&self.callback_stalls),
+        }
+    }
+
     /// Pointer to the 8 interleaved capture samples of a frame at `sample_time`.
     pub fn capture_frame(&self, sample_time: u64) -> *mut f32 {
         let i = (sample_time as usize % RING_FRAMES) * CHANNELS;

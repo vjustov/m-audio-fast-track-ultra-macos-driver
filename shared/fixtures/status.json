@@ -1,0 +1,12 @@
+{
+  "clock": "internal",
+  "clock_locked": null,
+  "connected": true,
+  "driver": "0.0.0",
+  "firmware": "1.51",
+  "port": "USB 2.0",
+  "power": "psu",
+  "sample_rate": 48000,
+  "startup_power": "psu",
+  "streaming": true
+}

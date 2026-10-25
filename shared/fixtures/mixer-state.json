@@ -1,0 +1,480 @@
+{
+  "buses": [
+    [
+      {
+        "level": -6.0,
+        "mute": false,
+        "pan": 0.25,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": 0.0,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": 0.0,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      }
+    ],
+    [
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": 0.0,
+        "mute": true,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": 0.0,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      }
+    ],
+    [
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": 0.0,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": 0.0,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      }
+    ],
+    [
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": null,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": 0.0,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      },
+      {
+        "level": 0.0,
+        "mute": false,
+        "pan": 0.0,
+        "solo": false
+      }
+    ]
+  ],
+  "fx": {
+    "bypass": [
+      false,
+      true
+    ],
+    "duration": 0.5,
+    "feedback": 0.5,
+    "program": 6,
+    "returns": [
+      -3.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "sends": [
+      null,
+      -10.0,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "volume": 1.0
+  },
+  "link": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+  ],
+  "out_link": [
+    true,
+    true,
+    true,
+    true
+  ],
+  "outputs": [
+    {
+      "level": -1.5,
+      "mute": false
+    },
+    {
+      "level": 0.0,
+      "mute": false
+    },
+    {
+      "level": 0.0,
+      "mute": false
+    },
+    {
+      "level": 0.0,
+      "mute": false
+    },
+    {
+      "level": 0.0,
+      "mute": false
+    },
+    {
+      "level": 0.0,
+      "mute": false
+    },
+    {
+      "level": 0.0,
+      "mute": false
+    },
+    {
+      "level": 0.0,
+      "mute": false
+    }
+  ]
+}
