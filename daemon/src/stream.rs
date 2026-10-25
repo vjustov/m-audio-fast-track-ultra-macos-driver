@@ -8,6 +8,7 @@
 //! All transfer callbacks run on the event thread, so `Engine` state needs no locking.
 //! The control thread only touches atomics.
 
+use crate::pacing::{Clock, Pacer};
 use crate::rt;
 use crate::shm::{ClockAnchor, Shm, ShmRegion, CHANNELS, RING_FRAMES};
 use crate::usb::{ClockSource, Device, UsbError, EP_CAP, EP_PLAY};
@@ -33,30 +34,14 @@ const IN_PACKETS: usize = 8;
 const IN_XFERS: usize = 24;
 const OUT_PACKETS: usize = 8;
 const OUT_XFERS: usize = 16;
-// Lead control: smoothing per playback transfer (1 ms), and the minimum number of
-// transfers between corrections.
-const LEAD_ALPHA: f64 = 0.05;
-const LEAD_HOLD: u32 = 20;
-// Smoothed lead error, in packets, that triggers a one-frame correction, and the error
-// that is fixed in one jump instead.
-const LEAD_BAND_PACKETS: f64 = 2.0;
-const LEAD_JUMP_PACKETS: f64 = 4.0;
 // A capture callback gap longer than this may have outlasted the playback queue's slack
 // (12 ms), skipping playback microframes and shifting the lead for real. The raw error
-// is erratic while the backlog of completions drains, then steady.
+// is erratic while the backlog of completions drains, then steady (see Pacer::stalled).
 const STALL_RESYNC_US: u64 = 10_000;
-// Playback transfers after such a stall during which the smoothed error just follows
-// the raw error, so one jump fixes the shift instead of a series chasing a lagging
-// average. More than OUT_XFERS, since the whole queue may complete in the backlog.
-const LEAD_SETTLE: u32 = 24;
 // Name of libusb's darwin run-loop thread (libusb/os/darwin_usb.c).
 const LIBUSB_EVENT_THREAD: &str = "org.libusb.device-hotplug";
-const FIFO_LEN: usize = 4096;
+const FIRST_SIZES: usize = 48;
 const S24_SCALE: f32 = 8_388_608.0;
-// Clock loop for 1 ms updates, 0.5 Hz bandwidth: omega = 2*pi*0.5*0.001,
-// b = sqrt(2)*omega, c = omega^2.
-const DLL_B: f64 = 0.004443;
-const DLL_C: f64 = 0.00000987;
 
 #[derive(Clone, Copy, Debug)]
 pub struct StreamConfig {
@@ -80,41 +65,19 @@ struct Engine {
     // Test hook: milliseconds the next capture callback sleeps, to reproduce stalls.
     stall_ms: Arc<AtomicU32>,
     rate: u32,
-
-    // Frame counts of completed capture packets, consumed by playback packets.
-    fifo: [u16; FIFO_LEN],
-    fifo_head: usize,
-    fifo_tail: usize,
-    nominal_acc: f64,
-
-    cap_pos: u64,
-    play_pos: u64,
-    // Playback position minus capture position that the stream should hold: the
-    // prefilled playback queue. Drift away from it means the device consumes at a
-    // different rate than we send, or that fallback packets were used.
-    target_lead: i64,
-    // Lead error smoothed over about 20 ms, sampled once per playback transfer. The raw
-    // error swings by about one transfer either way as capture transfers complete
-    // between playback transfers, so it cannot be acted on directly.
-    lead_err_avg: f64,
-    // Playback transfers since the last correction, and the correction (-1, 0, 1)
-    // the next packet applies.
-    since_correction: u32,
-    correction: i64,
-    // Transfers left in the settle period after a stall (LEAD_SETTLE).
-    settle: u32,
+    pace: Pacer,
     // Host time of the previous capture callback, for stall detection.
     last_cb_ticks: u64,
     ns_per_tick: f64,
     // True while the writer is behind the read position, so a stretch of missing
     // packets counts as one underrun.
     starved: bool,
+    // Frame counts of the first capture packets after start, logged once.
+    first_sizes: [u16; FIRST_SIZES],
+    first_n: usize,
 
     // Clock smoothing (sample time -> host ticks).
-    clock_init: bool,
-    anchor_sample: u64,
-    anchor_host: f64,
-    tpf: f64,
+    clock: Clock,
 
     stats: Stats,
 }
@@ -129,83 +92,47 @@ impl Engine {
         unsafe { &*self.shm }
     }
 
-    /// Decides once per playback transfer whether to correct the lead. With implicit
-    /// feedback the rates match, so the lead only moves after fallback packets or lost
-    /// capture packets. Each correction shifts output timing by one frame, so they are
-    /// limited to one per LEAD_HOLD transfers, and only when the smoothed error leaves
-    /// a band of two packets.
+    /// Runs the lead controller once per playback transfer and applies a jump to the
+    /// playback ring.
     fn plan_correction(&mut self) {
-        if self.cap_pos == 0 {
+        let Some(jump) = self.pace.plan_correction() else {
             return;
-        }
-        let err = (self.play_pos as i64 - self.cap_pos as i64 - self.target_lead) as f64;
-        if self.settle > 0 {
-            self.settle -= 1;
-            self.lead_err_avg = err;
-            self.since_correction = 0;
-            return;
-        }
-        self.lead_err_avg += LEAD_ALPHA * (err - self.lead_err_avg);
-        self.since_correction += 1;
-        let per_packet = (self.rate / 8000) as f64;
-        if self.since_correction < LEAD_HOLD {
-            return;
-        }
-        if self.lead_err_avg.abs() > LEAD_JUMP_PACKETS * per_packet {
-            // A disturbance moved the lead by many frames at once, and the output has
-            // already jumped. Fix it in one step: skip ahead in the playback ring
-            // (zeroing what is skipped) or step back (replaying zeroed frames, a short
-            // silence). One glitch instead of one per correction.
-            let jump = self.lead_err_avg.round() as i64;
-            if jump < 0 {
-                for f in 0..(-jump) as u64 {
-                    let p = self.shm().playback_frame(self.play_pos + f);
-                    // SAFETY: frames ahead of play_pos; the writer is far ahead of them.
-                    unsafe { std::ptr::write_bytes(p, 0, CHANNELS) };
-                }
+        };
+        if jump.frames < 0 {
+            for f in 0..(-jump.frames) as u64 {
+                let p = self.shm().playback_frame(jump.from + f);
+                // SAFETY: frames ahead of play_pos; the writer is far ahead of them.
+                unsafe { std::ptr::write_bytes(p, 0, CHANNELS) };
             }
-            eprintln!(
-                "ftu-daemon: {} lead jump {jump} frames (error now {err}, smoothed {:.1})",
-                crate::wall_clock(),
-                self.lead_err_avg
-            );
-            self.play_pos = (self.play_pos as i64 - jump) as u64;
-            self.lead_err_avg -= jump as f64;
-            self.since_correction = 0;
-            self.shm().lead_jumps.fetch_add(1, Ordering::Relaxed);
-        } else if self.lead_err_avg.abs() > LEAD_BAND_PACKETS * per_packet {
-            self.correction = if self.lead_err_avg > 0.0 { -1 } else { 1 };
-            self.since_correction = 0;
         }
+        eprintln!(
+            "ftu-daemon: {} lead jump {} frames (error now {}, smoothed {:.1})",
+            crate::wall_clock(),
+            jump.frames,
+            jump.err,
+            jump.smoothed
+        );
+        self.shm().lead_jumps.fetch_add(1, Ordering::Relaxed);
     }
 
-    /// Frames for the next playback packet: the size of the matching capture packet
-    /// (implicit feedback), plus a pending lead correction.
+    /// Frames for the next playback packet (implicit feedback plus a pending
+    /// correction), counting fallback packets and corrections.
     fn next_frame_count(&mut self) -> usize {
-        let mut n = if self.fifo_tail != self.fifo_head {
-            let n = self.fifo[self.fifo_tail % FIFO_LEN] as usize;
-            self.fifo_tail += 1;
-            n
-        } else {
+        let p = self.pace.next_packet();
+        if p.fallback {
             self.stats.fallback_packets += 1;
             self.shm().fallback_packets.fetch_add(1, Ordering::Relaxed);
-            self.nominal_acc += self.rate as f64 / 8000.0;
-            let n = self.nominal_acc as usize;
-            self.nominal_acc -= n as f64;
-            n
-        };
-        match std::mem::take(&mut self.correction) {
+        }
+        match p.correction {
             -1 => {
-                n = n.saturating_sub(1);
                 self.shm().lead_frames_dropped.fetch_add(1, Ordering::Relaxed);
             }
             1 => {
-                n += 1;
                 self.shm().lead_frames_added.fetch_add(1, Ordering::Relaxed);
             }
             _ => {}
         }
-        n.clamp(1, MAX_FRAMES_PER_PACKET)
+        p.frames
     }
 
     /// Fills a playback transfer from the playback ring and zeroes what it consumed.
@@ -224,15 +151,15 @@ impl Engine {
                 // that stops (an app ends playback, coreaudiod restarts) leaves write_pos
                 // behind, and per-packet counting turned the following ring's worth of
                 // intended silence into 2,731 "underruns" at 48 kHz.
-                let active = write_pos != 0 && write_pos + RING_FRAMES as u64 > self.play_pos;
-                let short = active && write_pos < self.play_pos + frames as u64;
+                let active = write_pos != 0 && write_pos + RING_FRAMES as u64 > self.pace.play_pos;
+                let short = active && write_pos < self.pace.play_pos + frames as u64;
                 if short && !self.starved {
                     shm.play_underruns.fetch_add(1, Ordering::Relaxed);
                 }
                 self.starved = short;
                 let out = (*t).buffer.add(offset);
                 for f in 0..frames {
-                    let src = shm.playback_frame(self.play_pos + f as u64);
+                    let src = shm.playback_frame(self.pace.play_pos + f as u64);
                     for c in 0..CHANNELS {
                         let s = *src.add(c);
                         *src.add(c) = 0.0;
@@ -243,18 +170,19 @@ impl Engine {
                         *p.add(2) = (v >> 16) as u8;
                     }
                 }
-                self.play_pos += frames as u64;
+                self.pace.played(frames);
                 self.stats.play_frames += frames as u64;
                 (*(*t).iso_packet_desc.as_mut_ptr().add(i)).length = (frames * FRAME_BYTES) as u32;
                 offset += frames * FRAME_BYTES;
             }
             (*t).length = offset as c_int;
-            shm.play_read_pos.store(self.play_pos, Ordering::Release);
+            shm.play_read_pos.store(self.pace.play_pos, Ordering::Release);
         }
     }
 
     /// Copies completed capture packets into the capture ring and records their sizes.
-    fn consume_in(&mut self, t: *mut ffi::libusb_transfer) {
+    /// `now` is the callback's start time; `trusted` says whether it can feed the clock.
+    fn consume_in(&mut self, t: *mut ffi::libusb_transfer, now: u64, trusted: bool) {
         let shm = self.shm;
         // SAFETY: as in prepare_out; actual_length is bounded by the packet length.
         unsafe {
@@ -267,57 +195,49 @@ impl Engine {
                     continue;
                 }
                 let frames = (d.actual_length as usize / FRAME_BYTES).min(MAX_FRAMES_PER_PACKET);
-                if self.fifo_head - self.fifo_tail < FIFO_LEN {
-                    self.fifo[self.fifo_head % FIFO_LEN] = frames as u16;
-                    self.fifo_head += 1;
+                if self.first_n < FIRST_SIZES {
+                    self.first_sizes[self.first_n] = frames as u16;
+                    self.first_n += 1;
+                    if self.first_n == FIRST_SIZES {
+                        eprintln!("ftu-daemon: {} first capture packets {:?}", crate::wall_clock(), self.first_sizes);
+                    }
                 } else {
-                    shm.fifo_overflows.fetch_add(1, Ordering::Relaxed);
+                    // Outside floor..ceil of rate/8000: the device is moving its own FIFO,
+                    // which shifts the round trip by a frame or a packet.
+                    let lo = (self.rate / 8000) as usize;
+                    let hi = lo + usize::from(self.rate % 8000 != 0);
+                    if frames < lo || frames > hi {
+                        eprintln!("ftu-daemon: {} capture packet of {frames} frames at {}", crate::wall_clock(), self.pace.cap_pos);
+                    }
                 }
                 let src = ffi::libusb_get_iso_packet_buffer_simple(t, i as u32);
                 for f in 0..frames {
-                    let dst = shm.capture_frame(self.cap_pos + f as u64);
+                    let dst = shm.capture_frame(self.pace.cap_pos + f as u64);
                     for c in 0..CHANNELS {
                         let p = src.add(f * FRAME_BYTES + c * 3);
                         let v = ((*p as i32) << 8 | (*p.add(1) as i32) << 16 | (*p.add(2) as i32) << 24) >> 8;
                         *dst.add(c) = v as f32 / S24_SCALE;
                     }
                 }
-                self.cap_pos += frames as u64;
+                if !self.pace.capture_packet(frames) {
+                    shm.fifo_overflows.fetch_add(1, Ordering::Relaxed);
+                }
                 self.stats.cap_frames += frames as u64;
             }
-            shm.cap_write_pos.store(self.cap_pos, Ordering::Release);
+            shm.cap_write_pos.store(self.pace.cap_pos, Ordering::Release);
         }
-        self.update_clock(rt::now_ticks());
+        self.update_clock(now, trusted);
     }
 
-    /// Tracks host time per device frame with a second-order delay-locked loop.
-    /// Capture completions arrive every 1 ms with scheduling jitter.
-    fn update_clock(&mut self, now: u64) {
-        let now = now as f64;
-        if !self.clock_init {
-            if self.cap_pos == 0 {
-                return;
-            }
-            self.clock_init = true;
-            self.anchor_sample = self.cap_pos;
-            self.anchor_host = now;
-            self.tpf = 1e9 / self.rate as f64 / rt::ns_per_tick();
-        } else {
-            let frames = (self.cap_pos - self.anchor_sample) as f64;
-            if frames <= 0.0 {
-                return;
-            }
-            let predicted = self.anchor_host + frames * self.tpf;
-            let err = now - predicted;
-            self.anchor_sample = self.cap_pos;
-            self.anchor_host = predicted + DLL_B * err;
-            self.tpf += DLL_C * err / frames;
+    /// Feeds the clock loop and publishes its anchor.
+    fn update_clock(&mut self, now: u64, trusted: bool) {
+        if self.clock.update(self.pace.cap_pos, now as f64, trusted) {
+            self.shm().publish_clock(ClockAnchor {
+                sample_time: self.clock.anchor_sample,
+                host_time: self.clock.anchor_host as u64,
+                host_ticks_per_frame: self.clock.ticks_per_frame,
+            });
         }
-        self.shm().publish_clock(ClockAnchor {
-            sample_time: self.anchor_sample,
-            host_time: self.anchor_host as u64,
-            host_ticks_per_frame: self.tpf,
-        });
     }
 
     fn resubmit(&mut self, t: *mut ffi::libusb_transfer, what: &str) {
@@ -350,13 +270,16 @@ extern "system" fn in_cb(t: *mut ffi::libusb_transfer) {
     // the event thread, so this is the only live &mut.
     let e = unsafe { &mut *((*t).user_data as *mut Engine) };
     let now = rt::now_ticks();
+    // The first callback has no gap; the clock loop only anchors on it.
+    let mut trusted = true;
     if e.last_cb_ticks != 0 {
         let gap_us = ((now - e.last_cb_ticks) as f64 * e.ns_per_tick / 1000.0) as u64;
+        trusted = Clock::trusted_gap(Duration::from_micros(gap_us));
         if gap_us > 3000 {
             e.shm().callback_stalls.fetch_add(1, Ordering::Relaxed);
         }
         if gap_us > STALL_RESYNC_US {
-            e.settle = LEAD_SETTLE;
+            e.pace.stalled();
         }
         e.shm().max_callback_gap_us.fetch_max(gap_us, Ordering::Relaxed);
     }
@@ -366,7 +289,7 @@ extern "system" fn in_cb(t: *mut ffi::libusb_transfer) {
     }
     e.last_cb_ticks = now;
     if unsafe { (*t).status } == LIBUSB_TRANSFER_COMPLETED {
-        e.consume_in(t);
+        e.consume_in(t, now, trusted);
     } else {
         e.stats.packet_errors += 1;
         e.shm().capture_errors.fetch_add(1, Ordering::Relaxed);
@@ -465,24 +388,13 @@ impl Stream {
             failed: failed.clone(),
             stall_ms: stall_ms.clone(),
             rate,
-            fifo: [0; FIFO_LEN],
-            fifo_head: 0,
-            fifo_tail: 0,
-            nominal_acc: 0.0,
-            cap_pos: 0,
-            play_pos: 0,
-            target_lead: (OUT_XFERS * OUT_PACKETS) as i64 * rate as i64 / 8000,
+            pace: Pacer::new(rate, OUT_XFERS * OUT_PACKETS, MAX_FRAMES_PER_PACKET),
             starved: false,
-            lead_err_avg: 0.0,
-            since_correction: 0,
-            correction: 0,
-            settle: 0,
+            first_sizes: [0; FIRST_SIZES],
+            first_n: 0,
             last_cb_ticks: 0,
             ns_per_tick: rt::ns_per_tick(),
-            clock_init: false,
-            anchor_sample: 0,
-            anchor_host: 0.0,
-            tpf: 0.0,
+            clock: Clock::new(rate, 1e9 / rate as f64 / rt::ns_per_tick()),
             stats: Stats::default(),
         });
 
