@@ -63,3 +63,8 @@ add_custom_command(TARGET ${DRIVER_NAME} POST_BUILD
   VERBATIM
   COMMAND codesign --force -s "${CODESIGN_ID}" "${CMAKE_CURRENT_BINARY_DIR}/${DRIVER_NAME}.driver"
   )
+
+# DaemonLink against a fake daemon (no device, no launchd service). make test runs it.
+add_executable(daemon_link_tests tests/DaemonLinkTests.cpp)
+target_include_directories(daemon_link_tests PRIVATE src ${CMAKE_CURRENT_LIST_DIR}/../shared)
+target_compile_options(daemon_link_tests PRIVATE -Wall -Wextra -Wno-unused-parameter -fblocks)

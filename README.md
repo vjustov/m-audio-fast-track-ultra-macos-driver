@@ -48,7 +48,7 @@ git clone --recurse-submodules <this repository>
 cd m-audio-fast-track-ultra-macos-driver
 
 make          # daemon, HAL plugin, control panel, hardware test tools
-make test     # daemon and panel unit tests; no device needed
+make test     # daemon, panel and plugin unit tests; no device needed
 ```
 
 `make daemon`, `make plugin`, `make panel` and `make hwtest` build one part.
