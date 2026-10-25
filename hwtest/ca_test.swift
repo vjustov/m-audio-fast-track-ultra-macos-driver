@@ -1,6 +1,6 @@
 // ca_test: end-to-end check through Core Audio. Plays a sine on one output channel of
 // the "Fast Track Ultra" device and records all 8 inputs to a WAV file.
-// Usage: swift proto/ca_test.swift <seconds> <out.wav> [channel 1-8] [dBFS] [sample rate]
+// Usage: swift hwtest/ca_test.swift <seconds> <out.wav> [channel 1-8] [dBFS] [sample rate]
 import AVFoundation
 import CoreAudio
 

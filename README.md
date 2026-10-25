@@ -47,13 +47,11 @@ coreaudiod ── HAL plugin (plugin/, C++, libASPL)
 git clone --recurse-submodules <this repository>
 cd m-audio-fast-track-ultra-macos-driver
 
-# Daemon
-(cd daemon && cargo build --release)
-
-# HAL plugin
-cmake -S plugin -B plugin/build -DCMAKE_BUILD_TYPE=Release
-cmake --build plugin/build
+make          # daemon, HAL plugin, control panel, hardware test tools
+make test     # daemon and panel unit tests; no device needed
 ```
+
+`make daemon`, `make plugin`, `make panel` and `make hwtest` build one part.
 
 ## Install
 
@@ -92,6 +90,7 @@ daemon/target/release/ftu-daemon test --seconds 10 --record /tmp/capture.wav
 | `shared/` | Shared-memory layout used by both |
 | `packaging/` | LaunchDaemon plist template and install/uninstall scripts |
 | `proto/` | Early prototypes: C streaming tool, CoreMIDI loopback tests |
+| `hwtest/` | Hardware test tools through Core Audio, need the device and a loopback cable: `soak` (dropouts), `latency` (round trip), `ca_test` (record and play) |
 | `tools/` | Python research tools: control requests, probes, loopback analysis |
 | `captures/` | Logs and USB descriptor dumps from hardware tests (audio captures not committed) |
 | `docs/` | Plan, feature checklist, protocol spec, driver inventories, firmware notes |
