@@ -4,7 +4,7 @@
 // sample time: (input sample time of the burst) - (output sample time it was written at).
 // Loop the output back to the input with a cable. A DAW aligns recordings using the
 // reported latencies, so they should add up to the measured round trip.
-// Build: swiftc -O proto/latency.swift -o proto/build/latency
+// Build: make hwtest (or swiftc -O hwtest/latency.swift -o hwtest/build/latency)
 // Usage: latency [output 1-8] [input 1-8] [bursts] [rate]   (defaults: 1 1 20, current rate)
 import CoreAudio
 import Foundation

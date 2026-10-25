@@ -4,7 +4,7 @@
 // device's own S/PDIF loop (outputs and inputs 7/8, needs the S/PDIF clock), or a cable.
 // Prints one line per minute and every glitch with its time and kind: a run of exact
 // zeros (dropout), a phase jump (samples skipped or repeated), or a blip.
-// Build: swiftc -O proto/soak.swift -o proto/build/soak
+// Build: make hwtest (or swiftc -O hwtest/soak.swift -o hwtest/build/soak)
 // Usage: soak <minutes> [output 1-8] [input 1-8] [dBFS] [dump.raw]   (defaults: 7 7 -20)
 // dump.raw gets 4096 float32 samples around each glitch (2048 before, 2048 after).
 import AVFoundation
