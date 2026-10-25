@@ -8,6 +8,7 @@
 #include <aspl/Driver.hpp>
 
 #include <CoreAudio/AudioServerPlugIn.h>
+#include <dispatch/dispatch.h>
 #include <mach/mach_time.h>
 #include <os/log.h>
 #include <xpc/xpc.h>
@@ -36,6 +37,11 @@ constexpr const char* kServiceName = "local.ftu.daemon";
 constexpr UInt32 kDefaultRate = 48000;
 constexpr UInt32 kRates[] = {44100, 48000, 88200, 96000};
 constexpr UInt32 kZeroTimeStampPeriod = 2048;
+// Upper bounds for waiting on the daemon. These waits run on coreaudiod threads, some
+// inside HAL configuration changes, so a stuck daemon must not stall them for long.
+// The daemon restarts the stream for a rate change in 0.1 to 0.25 s.
+constexpr int64_t kReplyTimeoutMs = 300;
+constexpr int kRateWaitMs = 1000;
 
 // The daemon keeps 16 ms of playback queued ahead of capture (daemon/src/stream.rs,
 // OUT_XFERS x OUT_PACKETS), so Core Audio must write output at least that far ahead.
@@ -79,20 +85,82 @@ public:
         return shm_.load(std::memory_order_acquire);
     }
 
-    // Not realtime-safe. Called from StartIO.
-    void EnsureConnected()
+    // Connects if needed and moves the daemon to `rate` on a background queue, so the
+    // caller (StartIO) never waits on the daemon. IO plays silence and timestamps fall
+    // back to the host clock until the daemon streams at `rate`. Rate 0 only connects.
+    void PrepareAsync(UInt32 rate)
     {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (Shm() && !stale_.load(std::memory_order_acquire)) {
-            return;
-        }
-        Connect();
+        dispatch_async(Queue(), ^{
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (!Shm() || stale_.load(std::memory_order_acquire)) {
+                Connect();
+            }
+            const ftu_shm_t* s = Shm();
+            // On S/PDIF clock the source sets the rate and the daemon ignores requests.
+            if (rate != 0 && s && s->clock_source.load() == 0 && s->sample_rate.load() != rate) {
+                RequestRateLocked(rate);
+            }
+        });
     }
 
-    // Asks the daemon to stream at `rate` and waits until it does. Not realtime-safe.
+    // Asks the daemon to stream at `rate` and waits until it does, at most about
+    // kReplyTimeoutMs + kRateWaitMs. Not realtime-safe.
     bool RequestRate(UInt32 rate)
     {
         std::lock_guard<std::mutex> lock(mutex_);
+        return RequestRateLocked(rate);
+    }
+
+private:
+    static dispatch_queue_t Queue()
+    {
+        static dispatch_queue_t q = dispatch_queue_create("local.ftu.plugin.daemon", DISPATCH_QUEUE_SERIAL);
+        return q;
+    }
+
+    // Sends `msg` and waits up to kReplyTimeoutMs for the reply. Returns the reply
+    // (caller releases) or nullptr on timeout, in which case the connection is marked
+    // stale so the next call reconnects. A late reply is dropped by the handler.
+    xpc_object_t SendWithTimeout(xpc_object_t msg)
+    {
+        struct Pending
+        {
+            dispatch_semaphore_t done = dispatch_semaphore_create(0);
+            std::atomic<xpc_object_t> reply{nullptr};
+            std::atomic<bool> abandoned{false};
+            ~Pending()
+            {
+                if (xpc_object_t r = reply.load()) {
+                    xpc_release(r);
+                }
+                dispatch_release(done);
+            }
+        };
+        auto p = std::make_shared<Pending>();
+        xpc_connection_send_message_with_reply(conn_, msg, ReplyQueue(), ^(xpc_object_t r) {
+            if (!p->abandoned.load()) {
+                p->reply.store(xpc_retain(r));
+            }
+            dispatch_semaphore_signal(p->done);
+        });
+        if (dispatch_semaphore_wait(p->done, dispatch_time(DISPATCH_TIME_NOW, kReplyTimeoutMs * NSEC_PER_MSEC)) != 0) {
+            p->abandoned.store(true);
+            stale_.store(true, std::memory_order_release);
+            os_log_error(Log(), "no reply from %{public}s within %lld ms", kServiceName, kReplyTimeoutMs);
+            return nullptr;
+        }
+        return xpc_retain(p->reply.load());
+    }
+
+    // Replies arrive here, never on Queue(), which may be blocked waiting for them.
+    static dispatch_queue_t ReplyQueue()
+    {
+        static dispatch_queue_t q = dispatch_queue_create("local.ftu.plugin.reply", DISPATCH_QUEUE_SERIAL);
+        return q;
+    }
+
+    bool RequestRateLocked(UInt32 rate)
+    {
         if (!Shm() || stale_.load(std::memory_order_acquire)) {
             Connect();
         }
@@ -108,8 +176,11 @@ public:
         xpc_object_t msg = xpc_dictionary_create(nullptr, nullptr, 0);
         xpc_dictionary_set_string(msg, "op", "set_rate");
         xpc_dictionary_set_uint64(msg, "rate", rate);
-        xpc_object_t reply = xpc_connection_send_message_with_reply_sync(conn_, msg);
+        xpc_object_t reply = SendWithTimeout(msg);
         xpc_release(msg);
+        if (!reply) {
+            return false;
+        }
         const bool ok = xpc_get_type(reply) == XPC_TYPE_DICTIONARY && xpc_dictionary_get_bool(reply, "ok");
         xpc_release(reply);
         if (!ok) {
@@ -118,7 +189,7 @@ public:
         }
 
         // The daemon restarts the stream: wait for a new generation at the new rate.
-        for (int i = 0; i < 300; i++) {
+        for (int i = 0; i < kRateWaitMs / 10; i++) {
             if (s->generation.load() != gen && s->sample_rate.load() == rate && s->running.load()) {
                 os_log(Log(), "rate changed to %u", rate);
                 return true;
@@ -152,9 +223,11 @@ private:
 
         xpc_object_t msg = xpc_dictionary_create(nullptr, nullptr, 0);
         xpc_dictionary_set_string(msg, "op", "hello");
-        xpc_object_t reply = xpc_connection_send_message_with_reply_sync(conn_, msg);
+        xpc_object_t reply = SendWithTimeout(msg);
         xpc_release(msg);
-
+        if (!reply) {
+            return;
+        }
         if (xpc_get_type(reply) != XPC_TYPE_DICTIONARY) {
             os_log_error(Log(), "no reply from %{public}s (daemon not running?)", kServiceName);
             xpc_release(reply);
@@ -344,11 +417,16 @@ protected:
         }
         rate_->rate.store(static_cast<UInt32>(rate));
         const OSStatus st = aspl::Device::SetNominalSampleRateImpl(rate);
-        for (auto& s : streams_) {
-            s->NotifyPropertiesChanged({kAudioStreamPropertyPhysicalFormat, kAudioStreamPropertyVirtualFormat});
-        }
-        NotifyPropertyChanged(kAudioDevicePropertySafetyOffset, kAudioObjectPropertyScopeInput);
-        NotifyPropertyChanged(kAudioDevicePropertySafetyOffset, kAudioObjectPropertyScopeOutput);
+        // Sent after the configuration change returns: calling back into the HAL from
+        // inside it re-enters the plug-in command gate. The device lives as long as the
+        // driver host, so `this` stays valid.
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+            for (auto& s : streams_) {
+                s->NotifyPropertiesChanged({kAudioStreamPropertyPhysicalFormat, kAudioStreamPropertyVirtualFormat});
+            }
+            NotifyPropertyChanged(kAudioDevicePropertySafetyOffset, kAudioObjectPropertyScopeInput);
+            NotifyPropertyChanged(kAudioDevicePropertySafetyOffset, kAudioObjectPropertyScopeOutput);
+        });
         return st;
     }
 
@@ -361,7 +439,9 @@ protected:
     {
         const ftu_shm_t* s = link_->Shm();
         ClockAnchor a;
-        if (Running(s) && ReadClock(s, a)) {
+        // A daemon still at another rate (StartIO moves it asynchronously) would give
+        // timestamps at the wrong rate.
+        if (Running(s) && s->sample_rate.load(std::memory_order_acquire) == rate_->rate.load() && ReadClock(s, a)) {
             const double now = static_cast<double>(mach_absolute_time());
             const double sampleNow =
                 static_cast<double>(a.sampleTime) + (now - a.hostTime) / a.ticksPerFrame;
@@ -392,18 +472,13 @@ public:
 
     OSStatus OnStartIO() override
     {
-        link_->EnsureConnected();
         // A new IO session starts a new timeline: do not count its first cycle as a jump.
         in_.Reset();
         out_.Reset();
         // The daemon may be at another rate (its default, or a previous session's).
-        // Core Audio's nominal rate wins, except on S/PDIF clock, where the source
-        // sets the rate and the daemon ignores requests.
-        const ftu_shm_t* s = link_->Shm();
-        const UInt32 want = rate_->rate.load();
-        if (s && s->clock_source.load() == 0 && s->sample_rate.load() != want) {
-            link_->RequestRate(want);
-        }
+        // Core Audio's nominal rate wins, except on S/PDIF clock. Done in the
+        // background: StartIO holds up every client of the device while it runs.
+        link_->PrepareAsync(rate_->rate.load());
         return kAudioHardwareNoError;
     }
 
