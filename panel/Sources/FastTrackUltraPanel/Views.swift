@@ -317,6 +317,12 @@ struct SettingsView: View {
                 Picker("Algorithm", selection: Binding(get: { state.fx.program }, set: { store.setProgram($0) })) {
                     ForEach(programs.indices, id: \.self) { Text(programs[$0]).tag($0) }
                 }
+                if state.fx.post_fader != nil {
+                    Picker("FX sends", selection: Binding(get: { state.fx.post_fader ?? false }, set: { store.setPostFader($0) })) {
+                        Text("Pre-Fader").tag(false)
+                        Text("Post-Fader (Mix 1/2)").tag(true)
+                    }
+                }
                 fxRow("Duration", "duration", state.fx.duration)
                 fxRow("Feedback", "feedback", state.fx.feedback)
                 fxRow("Volume", "volume", state.fx.volume)

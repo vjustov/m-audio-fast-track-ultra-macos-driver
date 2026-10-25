@@ -212,7 +212,7 @@ mod tests {
         let (c, d) = control("contract");
         // A state with every kind of value, not only defaults (null levels, zero pans).
         let set = r#"{"set": [["bus1.in1.level", "-6"], ["bus1.in1.pan", "0.25"], ["bus2.daw3.mute", "on"], ["link.in1", "on"],
-            ["fx.program", "plate"], ["fx.feedback", "0.25"], ["fx.program", "delay"], ["fx.send.in2", "-10"], ["fx.return.1", "-3"], ["fx.bypass.2", "on"], ["out1.level", "-1.5"]]}"#;
+            ["fx.program", "plate"], ["fx.feedback", "0.25"], ["fx.program", "delay"], ["fx.send.in2", "-10"], ["fx.return.1", "-3"], ["fx.bypass.2", "on"], ["fx.post_fader", "on"], ["out1.level", "-1.5"]]}"#;
         assert_eq!(c.handle(set), json!({ "ok": true }));
         {
             let mut st = c.status.lock().unwrap();

@@ -74,6 +74,10 @@ pub struct Fx {
     /// Per bus 1/2 and 3/4: silence the effect return on that bus. The firmware has no
     /// known bypass request (docs/protocol.md, Still open), so this zeroes unit 7.
     pub bypass: Vec<bool>,
+    /// Our extension, named after the vendor panel's "Post-Fader (Mix 1/2)" setting,
+    /// which changes nothing on this device (docs/protocol.md): each source's send
+    /// follows its Mix 1/2 fader, mute and solo. Off (the default) is plain sends.
+    pub post_fader: bool,
 }
 
 impl Default for Fx {
@@ -88,6 +92,7 @@ impl Default for Fx {
             sends: vec![None; SOURCES],
             returns: vec![Some(0.0); RETURNS],
             bypass: vec![false; RETURNS / 2],
+            post_fader: false,
         }
     }
 }
@@ -280,6 +285,22 @@ impl Mixer {
         }
     }
 
+    /// Effect send of source `s` in dB as sent to the device: the send itself, or in
+    /// post-fader mode the send offset by the source's Mix 1/2 fader, off while the
+    /// source is muted or soloed out there.
+    fn effective_send(&self, s: usize) -> Option<f64> {
+        let send = self.fx.sends[s]?;
+        if !self.fx.post_fader {
+            return Some(send);
+        }
+        let bus = &self.buses[0];
+        let any_solo = bus.iter().any(|x| x.solo);
+        match bus[s].level {
+            Some(l) if !bus[s].mute && (!any_solo || bus[s].solo) => Some(send + l.min(0.0)),
+            _ => None,
+        }
+    }
+
     /// Every request needed to put the device in this state.
     pub fn controls(&self) -> Vec<Ctl> {
         let mut v = Vec::with_capacity(200);
@@ -290,8 +311,8 @@ impl Mixer {
                 v.push(Ctl::new(UNIT_MIXER, (2 * b + 2) as u8, s + 1, s16(gain_word(r))));
             }
         }
-        for (s, send) in self.fx.sends.iter().enumerate() {
-            v.push(Ctl::new(UNIT_MIXER, CTL_SEND, s + 1, s16(db_word(*send))));
+        for s in 0..SOURCES {
+            v.push(Ctl::new(UNIT_MIXER, CTL_SEND, s + 1, s16(db_word(self.effective_send(s)))));
         }
         let unit = |x: f64, max: f64| (x.clamp(0.0, 1.0) * max).round();
         v.push(Ctl::new(UNIT_FX, 1, 0, vec![self.fx.program]));
@@ -320,6 +341,7 @@ impl Mixer {
     ///   fx.send.<src>                         dB
     ///   fx.return.<1-4>                       dB
     ///   fx.bypass.<1-2>                       bus 1 or 2
+    ///   fx.post_fader                         on: sends follow the Mix 1/2 faders
     ///   out<1-8>.level|mute
     pub fn set(&mut self, path: &str, value: &str) -> Result<(), String> {
         let parts: Vec<&str> = path.split('.').collect();
@@ -365,6 +387,7 @@ impl Mixer {
                 let o = index(o, RETURNS).ok_or_else(|| format!("bad return '{o}', use 1..4"))?;
                 self.fx.returns[o] = db(value)?;
             }
+            ["fx", "post_fader"] => self.fx.post_fader = boolean(value)?,
             ["fx", "bypass", b] => {
                 let b = index(b, RETURNS / 2).ok_or_else(|| format!("bad bus '{b}', bypass exists on bus 1 and 2"))?;
                 self.fx.bypass[b] = boolean(value)?;
@@ -517,5 +540,28 @@ mod tests {
         m.set("fx.program", "room1").unwrap();
         m.set("fx.program", "delay").unwrap();
         assert_eq!((m.fx.volume, m.fx.duration, m.fx.feedback), (0.3, 0.9, 0.1));
+    }
+
+    #[test]
+    fn post_fader_sends_follow_the_mix_1_2_fader() {
+        let mut m = Mixer::default();
+        m.set("fx.send.in1", "-10").unwrap();
+        m.set("bus1.in1.level", "-6").unwrap();
+        // Pre-fader: the send alone.
+        assert_eq!(word(&m, 5, 9, 1), -2560);
+        m.set("fx.post_fader", "on").unwrap();
+        assert_eq!(word(&m, 5, 9, 1), -16 * 256);
+        m.set("bus1.in1.mute", "on").unwrap();
+        assert_eq!(word(&m, 5, 9, 1), OFF);
+        m.set("bus1.in1.mute", "off").unwrap();
+        m.set("bus1.in2.solo", "on").unwrap();
+        assert_eq!(word(&m, 5, 9, 1), OFF, "soloed out on Mix 1/2");
+        m.set("bus1.in2.solo", "off").unwrap();
+        // A source off on Mix 1/2 sends nothing post-fader; other buses do not count.
+        m.set("bus2.in3.level", "0").unwrap();
+        m.set("fx.send.in3", "0").unwrap();
+        assert_eq!(word(&m, 5, 9, 3), OFF);
+        m.set("fx.post_fader", "off").unwrap();
+        assert_eq!(word(&m, 5, 9, 3), 0);
     }
 }

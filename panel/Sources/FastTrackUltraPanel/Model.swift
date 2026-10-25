@@ -29,6 +29,8 @@ struct Fx: Codable, Equatable {
     var sends: [Double?]
     var returns: [Double?]
     var bypass: [Bool]
+    /// FX sends follow the Mix 1/2 faders ("Post-Fader (Mix 1/2)"). Optional: older daemons lack it.
+    var post_fader: Bool?
 }
 
 struct Output: Codable, Equatable {
@@ -276,6 +278,11 @@ final class Store: ObservableObject {
             if let err = (r as? [String: Any])?["error"] as? String { self.message = err }
             self.refreshStatus()
         }
+    }
+
+    func setPostFader(_ on: Bool) {
+        state?.fx.post_fader = on
+        send("fx.post_fader", on ? "on" : "off")
     }
 
     func setProgram(_ i: Int) {

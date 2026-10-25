@@ -400,6 +400,7 @@
     ],
     "duration": 0.5,
     "feedback": 0.5,
+    "post_fader": true,
     "program": 6,
     "programs": [
       {
