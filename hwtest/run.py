@@ -8,6 +8,7 @@ that input muted in the monitor mix so the loop does not feed back. No root need
     python3 -I hwtest/run.py                    # all checks, 5-minute soak
     python3 -I hwtest/run.py --quick            # 1-minute soak, latency at 2 starts per rate
     python3 -I hwtest/run.py --compare-delay    # also the rate matrix without the playback delay
+    python3 -I hwtest/run.py --channels 6       # cables on outputs 1-6 to inputs 1-6: check the channel map
 
 Writes the full log to captures/hwtest-<date>-<time>.txt. Exit status 1 if a check fails.
 """
@@ -82,7 +83,9 @@ def log_since(mark):
 
 GAIN_RE = re.compile(r"gain ([-+][\d.]+)")
 # A burst that came back: below this the tool correlates against silence or noise.
-MIN_GAIN = 0.1
+# With the input gain knobs at minimum (line level into the preamps) a clean loop
+# returns about 0.04; silence returns a 0-frame round trip.
+MIN_GAIN = 0.01
 LATENCY_RE = re.compile(r"round trip ([\d.]+) frames .*spread ([\d.]+); reported latency sum (\d+); unreported (-?[\d.]+)")
 
 
@@ -109,6 +112,31 @@ def preflight(r, a):
     res, text = latency(a.out, a.inp, 2, 48000)
     r.check("loopback", res is not None and res["spread"] <= 1.0, (f"{res['trip']:.2f} frames at 48 kHz" if res else text.strip()[-200:]))
     return all(ok for _, ok, _ in r.results)
+
+
+def inputs_isolated(channels):
+    """Looped inputs must not reach any output through the monitor mix, or the loop
+    feeds back. Returns the offending (bus, input) pairs."""
+    code, out = ctl("get", "state")
+    if code != 0 or not out.startswith("{"):
+        return None
+    m = json.loads(out)
+    return [(b + 1, s + 1) for b, bus in enumerate(m["buses"]) for s in range(channels) if bus[s]["level"] is not None and not bus[s]["mute"]]
+
+
+def channel_map(r, a):
+    """Each output looped to the same input: the burst must come back on that input,
+    with the same round trip on every channel."""
+    trips = []
+    for ch in range(1, a.channels + 1):
+        res, text = latency(ch, ch, 2, 48000)
+        if res is None:
+            r.check(f"channel {ch}: output {ch} -> input {ch}", False, text.strip()[-150:])
+            continue
+        trips.append(res["trip"])
+        r.log(f"  channel {ch}: {res['trip']:.2f} frames")
+    ok = len(trips) == a.channels and max(trips) - min(trips) <= ROUND_TRIP_SPREAD
+    r.check(f"channel map 1-{a.channels}", ok, f"round trips {min(trips):.2f} to {max(trips):.2f} frames" if trips else "no data")
 
 
 def rate_matrix(r, a, label):
@@ -169,6 +197,7 @@ def main():
     ap.add_argument("--soak-minutes", type=float, default=5)
     ap.add_argument("--quick", action="store_true")
     ap.add_argument("--compare-delay", action="store_true", help="also run the rate matrix with playback delay 0")
+    ap.add_argument("--channels", type=int, default=0, help="outputs 1..N looped to inputs 1..N: check the channel map")
     a = ap.parse_args()
     if a.quick:
         a.soak_minutes = min(a.soak_minutes, 1)
@@ -181,7 +210,14 @@ def main():
     r = Run(path)
     r.log(f"hwtest {stamp}, loop output {a.out} -> input {a.inp}")
 
-    if preflight(r, a):
+    looped = max(a.channels, a.inp)
+    bad = inputs_isolated(looped)
+    if bad is None or bad:
+        r.check("looped inputs muted in the mix", False, f"audible: {bad} (bus, input); mute them first" if bad else "no state from the daemon")
+    elif preflight(r, a):
+        if a.channels:
+            r.log(f"channel map, outputs 1-{a.channels} to inputs 1-{a.channels}:")
+            channel_map(r, a)
         if a.compare_delay:
             r.log("rate matrix, playback delay 0 ms (vendor-style delay off):")
             ctl("playback-delay", 0)
