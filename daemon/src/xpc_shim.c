@@ -20,8 +20,9 @@
 static void* g_addr;
 static size_t g_len;
 static xpc_connection_t g_listener;
-// ctl requests run here, not on the listener queue: one can take seconds of control
-// transfers when USB is struggling, and coreaudiod's hello and set_rate must not wait.
+// ctl requests run here, not on the listener queue. They only update state and save it
+// to disk (the service loop does the USB writes), but coreaudiod's hello and set_rate
+// should never queue behind a file write.
 static dispatch_queue_t g_ctl_queue;
 static _Atomic uint32_t g_requested_rate;
 
