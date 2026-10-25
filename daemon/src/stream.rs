@@ -49,6 +49,8 @@ const STALL_RESYNC_US: u64 = 10_000;
 // the raw error, so one jump fixes the shift instead of a series chasing a lagging
 // average. More than OUT_XFERS, since the whole queue may complete in the backlog.
 const LEAD_SETTLE: u32 = 24;
+// Name of libusb's darwin run-loop thread (libusb/os/darwin_usb.c).
+const LIBUSB_EVENT_THREAD: &str = "org.libusb.device-hotplug";
 const FIFO_LEN: usize = 4096;
 const S24_SCALE: f32 = 8_388_608.0;
 // Clock loop for 1 ms updates, 0.5 Hz bandwidth: omega = 2*pi*0.5*0.001,
@@ -529,6 +531,14 @@ impl Stream {
             }
         }
         s.running.store(1, Ordering::Release);
+
+        // On macOS libusb receives every completion on its own run-loop thread first and
+        // only then wakes ours, so a preempted run-loop thread stalls the stream as much
+        // as a preempted ftu-usb thread. It runs at normal priority unless raised here.
+        // It is created with the libusb context, so this repeats for each start.
+        if rt::make_named_realtime(LIBUSB_EVENT_THREAD, 1_000_000, 300_000) == 0 {
+            eprintln!("warning: could not make {LIBUSB_EVENT_THREAD} realtime");
+        }
 
         let thread_stopping = stopping.clone();
         let thread = std::thread::Builder::new()
