@@ -20,6 +20,9 @@
 static void* g_addr;
 static size_t g_len;
 static xpc_connection_t g_listener;
+// ctl requests run here, not on the listener queue: one can take seconds of control
+// transfers when USB is struggling, and coreaudiod's hello and set_rate must not wait.
+static dispatch_queue_t g_ctl_queue;
 static _Atomic uint32_t g_requested_rate;
 
 // Implemented in Rust (ctl.rs).
@@ -59,9 +62,18 @@ static void handle_message(xpc_connection_t peer, xpc_object_t msg) {
         }
         xpc_dictionary_set_bool(reply, "ok", ok);
     } else if (op && strcmp(op, "ctl") == 0) {
-        char* response = ftu_ctl_request(xpc_dictionary_get_string(msg, "request"));
-        xpc_dictionary_set_string(reply, "response", response);
-        ftu_ctl_free(response);
+        xpc_retain(peer);
+        xpc_retain(msg);
+        dispatch_async(g_ctl_queue, ^{
+            char* response = ftu_ctl_request(xpc_dictionary_get_string(msg, "request"));
+            xpc_dictionary_set_string(reply, "response", response);
+            ftu_ctl_free(response);
+            xpc_connection_send_message(peer, reply);
+            xpc_release(reply);
+            xpc_release(msg);
+            xpc_release(peer);
+        });
+        return;
     } else {
         xpc_dictionary_set_string(reply, "error", "unknown op");
     }
@@ -98,6 +110,7 @@ int ftu_xpc_listen(const char* name, void* addr, size_t len) {
     g_addr = addr;
     g_len = len;
     dispatch_queue_t q = dispatch_queue_create("ftu.xpc", DISPATCH_QUEUE_SERIAL);
+    g_ctl_queue = dispatch_queue_create("ftu.xpc.ctl", DISPATCH_QUEUE_SERIAL);
     g_listener = xpc_connection_create_mach_service(name, q, XPC_CONNECTION_MACH_SERVICE_LISTENER);
     if (!g_listener) {
         return -1;
