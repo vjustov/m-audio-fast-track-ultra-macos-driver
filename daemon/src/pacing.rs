@@ -23,6 +23,8 @@ const FIFO_LEN: usize = 4096;
 // b = sqrt(2)*omega, c = omega^2.
 const DLL_B: f64 = 0.004443;
 const DLL_C: f64 = 0.00000987;
+// Callbacks in a row that must be far off before the clock re-anchors.
+const RESYNC_AFTER: u32 = 3;
 
 /// A lead jump decided by `Pacer::plan_correction`.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -201,9 +203,12 @@ impl Pacer {
 /// completions arrive every 1 ms with scheduling jitter.
 pub struct Clock {
     init: bool,
-    // A trusted time this far from the prediction means sample time itself jumped
-    // (capture packets were lost in a long stall): re-anchor instead of smoothing.
+    // A trusted time this far from the prediction is either a late wake-up (ignored) or,
+    // if it persists for RESYNC_AFTER callbacks, a jump of sample time itself (capture
+    // packets lost in a long stall): then re-anchor instead of smoothing.
     resync_ticks: f64,
+    // Consecutive trusted callbacks beyond resync_ticks.
+    far: u32,
     pub anchor_sample: u64,
     pub anchor_host: f64,
     pub ticks_per_frame: f64,
@@ -213,7 +218,7 @@ impl Clock {
     /// `ticks_per_frame` is the nominal value: host ticks per second / sample rate.
     pub fn new(rate: u32, ticks_per_frame: f64) -> Self {
         let resync_ticks = ticks_per_frame * rate as f64 * 0.002;
-        Self { init: false, resync_ticks, anchor_sample: 0, anchor_host: 0.0, ticks_per_frame }
+        Self { init: false, resync_ticks, far: 0, anchor_sample: 0, anchor_host: 0.0, ticks_per_frame }
     }
 
     /// Feeds the capture position at host time `now` (ticks). Returns true when the
@@ -236,11 +241,20 @@ impl Clock {
             return false;
         }
         let predicted = self.anchor_host + frames * self.ticks_per_frame;
-        let err = if trusted { now - predicted } else { 0.0 };
+        let mut err = if trusted { now - predicted } else { 0.0 };
         self.anchor_sample = cap_pos;
         if err.abs() > self.resync_ticks {
-            self.anchor_host = now;
-            return true;
+            self.far += 1;
+            if self.far >= RESYNC_AFTER {
+                self.far = 0;
+                self.anchor_host = now;
+                return true;
+            }
+            // One late wake-up says nothing about the device: ignore it. Re-anchoring on
+            // it jumped timestamps by about 100 frames and made Core Audio skip IO.
+            err = 0.0;
+        } else {
+            self.far = 0;
         }
         self.anchor_host = predicted + DLL_B * err;
         self.ticks_per_frame += DLL_C * err / frames;
@@ -317,6 +331,11 @@ mod tests {
         stale: VecDeque<usize>,
         events: VecDeque<Event>,
         stalled_until: u64,
+        // Scheduling jitter: the event thread sometimes wakes up to 3.5 ms late, as the
+        // daemon's thread does (callback gaps of 1.5 to 5.7 ms seen on 2026-10-25).
+        jitter: bool,
+        late_until: u64,
+        rng: u64,
         // Queued playback packets: (microframe, ring position of the first frame).
         sched: VecDeque<(u64, u64)>,
         xfer_ends: VecDeque<u64>,
@@ -346,6 +365,9 @@ mod tests {
                 stale: VecDeque::new(),
                 events: VecDeque::new(),
                 stalled_until: 0,
+                jitter: false,
+                late_until: 0,
+                rng: 0x2545F4914F6CDD1D,
                 sched: VecDeque::new(),
                 xfer_ends: VecDeque::new(),
                 next_free: play_start,
@@ -419,7 +441,15 @@ mod tests {
                 self.events.push_back(Event::Playback);
             }
             self.mf += 1;
-            if self.mf >= self.stalled_until {
+            if self.jitter && self.mf >= self.late_until {
+                self.rng ^= self.rng << 13;
+                self.rng ^= self.rng >> 7;
+                self.rng ^= self.rng << 17;
+                if self.rng % 40 == 0 {
+                    self.late_until = self.mf + 1 + self.rng / 40 % 28;
+                }
+            }
+            if self.mf >= self.stalled_until && self.mf >= self.late_until {
                 while let Some(e) = self.events.pop_front() {
                     match e {
                         Event::Capture(sizes, end) => {
@@ -630,5 +660,21 @@ mod tests {
             .map(|&(_, e)| (e - base).abs())
             .fold(0.0, f64::max);
         assert!(worst < 1.0, "clock off by {worst:.1} frames after re-anchoring");
+    }
+
+    #[test]
+    fn clock_ignores_callback_jitter() {
+        // Late wake-ups of up to 3.5 ms, no frames lost: the device clock did not move,
+        // so the estimate may not either. A late callback inside the trusted gap range
+        // must not re-anchor the clock (that jumped timestamps by about 100 frames on
+        // hardware and made Core Audio skip IO cycles, 2026-10-25).
+        let mut s = Sim::start(48000);
+        s.jitter = true;
+        s.run_ms(20_000);
+        let steady: Vec<f64> = s.clock_err.iter().filter(|&&(m, _)| m > 5000 * 8).map(|&(_, e)| e).collect();
+        let (lo, hi) = steady.iter().fold((f64::MAX, f64::MIN), |(l, h), &e| (l.min(e), h.max(e)));
+        // The clock before 2026-10-25 moved 17 frames here and still ran an 8-hour soak
+        // clean; the re-anchor on a single late callback moved it 132.
+        assert!(hi - lo < 6.0, "clock error spread {lo:.1}..{hi:.1} frames under jitter");
     }
 }

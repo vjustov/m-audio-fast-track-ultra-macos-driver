@@ -72,7 +72,6 @@ struct Engine {
     failed: Arc<AtomicBool>,
     // Test hook: milliseconds the next capture callback sleeps, to reproduce stalls.
     stall_ms: Arc<AtomicU32>,
-    rate: u32,
     pace: Pacer,
     // Host time of the previous capture callback, for stall detection.
     last_cb_ticks: u64,
@@ -209,15 +208,11 @@ impl Engine {
                     if self.first_n == FIRST_SIZES {
                         eprintln!("ftu-daemon: {} first capture packets {:?}", crate::wall_clock(), self.first_sizes);
                     }
-                } else {
-                    // Outside floor..ceil of rate/8000: the device is moving its own FIFO,
-                    // which shifts the round trip by a frame or a packet.
-                    let lo = (self.rate / 8000) as usize;
-                    let hi = lo + usize::from(self.rate % 8000 != 0);
-                    if frames < lo || frames > hi {
-                        eprintln!("ftu-daemon: {} capture packet of {frames} frames at {}", crate::wall_clock(), self.pace.cap_pos);
-                    }
                 }
+                // Packets of 7 then 5 frames at 48 kHz are normal while streaming (the
+                // device's sample clock against USB frame timing), so packet sizes outside
+                // the rate's pattern are not logged: at about 500 a second, writing them
+                // from this thread stalled it (2026-10-25).
                 let src = ffi::libusb_get_iso_packet_buffer_simple(t, i as u32);
                 for f in 0..frames {
                     let dst = shm.capture_frame(self.pace.cap_pos + f as u64);
@@ -395,7 +390,6 @@ impl Stream {
             inflight: inflight.clone(),
             failed: failed.clone(),
             stall_ms: stall_ms.clone(),
-            rate,
             pace: Pacer::new(rate, OUT_XFERS * OUT_PACKETS, MAX_FRAMES_PER_PACKET),
             starved: false,
             first_sizes: [0; FIRST_SIZES],
