@@ -90,7 +90,7 @@ daemon/target/release/ftu-daemon test --seconds 10 --record /tmp/capture.wav
 | `shared/` | Shared-memory layout used by both |
 | `packaging/` | LaunchDaemon plist template and install/uninstall scripts |
 | `proto/` | Early prototypes: C streaming tool, CoreMIDI loopback tests |
-| `hwtest/` | Hardware test tools through Core Audio, need the device and a loopback cable: `soak` (dropouts), `latency` (round trip), `ca_test` (record and play) |
+| `hwtest/` | Hardware test tools through Core Audio, need the device and a loopback cable: `soak` (dropouts), `latency` (round trip), `ca_test` (record and play), and `run.py` (`make hwcheck`), which runs the latency matrix, a stall test and a soak and prints a verdict |
 | `tools/` | Python research tools: control requests, probes, loopback analysis |
 | `captures/` | Logs and USB descriptor dumps from hardware tests (audio captures not committed) |
 | `docs/` | Plan, feature checklist, protocol spec, driver inventories, firmware notes |

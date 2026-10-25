@@ -2,7 +2,7 @@
 
 HWTEST := soak latency ca_test
 
-.PHONY: all daemon plugin panel hwtest test clean
+.PHONY: all daemon plugin panel hwtest hwcheck test clean
 
 all: daemon plugin panel hwtest
 
@@ -22,6 +22,11 @@ hwtest: $(HWTEST:%=hwtest/build/%)
 hwtest/build/%: hwtest/%.swift
 	@mkdir -p hwtest/build
 	swiftc -O $< -o $@
+
+# The hardware checks with a verdict: needs the device, the installed driver and a
+# loopback cable from output 1 to input 1 (see hwtest/run.py).
+hwcheck: hwtest
+	python3 -I hwtest/run.py
 
 # Unit tests only; nothing here needs the device.
 test:
