@@ -9,9 +9,10 @@ Streaming, the XPC service and mixer control work end to end with the HAL plugin
 | Part | File | State |
 | --- | --- | --- |
 | Device access, UAC1 requests | `src/usb.rs` | Open, claim, alt settings, sample rate, meters |
-| Isochronous engine | `src/stream.rs` | 8×8 S24 at all rates, implicit feedback, realtime event thread |
+| Isochronous engine | `src/stream.rs` | 8×8 S24 at all rates, implicit feedback, realtime event thread and libusb run-loop thread |
 | Shared memory | `src/shm.rs`, `../shared/ftu_shm.h` | f32 rings indexed by device sample time, seqlock clock anchor |
-| Device clock | `src/stream.rs` (`update_clock`) | Second-order DLL, 0.5 Hz bandwidth. Estimate stays within about ±10 Hz of 48 kHz, 1 s readings |
+| Lead control, packet sizing | `src/pacing.rs` (`Pacer`) | Pure logic, tested against a simulated device |
+| Device clock | `src/pacing.rs` (`Clock`), published by `src/stream.rs` | Second-order DLL, 0.5 Hz bandwidth. Estimate stays within about ±10 Hz of 48 kHz, 1 s readings |
 | XPC service | `src/xpc_shim.c` | Hands the shared memory to `coreaudiod`'s user and the owner. Rate requests, mixer control |
 | Mixer state | `src/mixer.rs` | Matrix with pan, link, mute and solo; effect; returns; output gain. Vendor pan and balance laws |
 | Control service | `src/ctl.rs` | JSON requests over XPC, persistence, writes changes to the device, meter polling |
@@ -41,6 +42,7 @@ D="/Library/Application Support/FastTrackUltra/ftu-daemon"
 "$D" ctl clock spdif               # or internal; saved in device.json, restarts the stream
 "$D" ctl set bus1.in1.level -6 bus1.in1.pan 0.5
 "$D" ctl reset                     # defaults: DAW 1-8 to outputs 1-8, inputs off
+"$D" ctl stall 20                  # test hook: stalls the USB event thread once for 20 ms
 ```
 
 | Path | Value |
@@ -65,7 +67,10 @@ Sources are `in1` to `in8` (7 and 8 are S/PDIF) and `daw1` to `daw8`. Several pa
 
 - **One clock.** Sample time is the count of frames the device has captured. Both rings are indexed by it, and the clock anchor maps it to `mach_absolute_time()`. The plugin derives its zero timestamps from the anchor.
 - **Playback ring contract.** The writer fills frames ahead of `play_read_pos` and advances `play_write_pos`. The daemon zeroes each frame after sending it, so a stalled writer produces silence, not a repeated buffer.
-- **Queue depth.** Capture: 24 transfers × 8 microframes. Playback: 16 × 8 (16 ms), with a control loop that holds the playback lead constant. An 8 ms playback queue failed with `kIOReturnIsoTooOld`.
+- **Queue depth.** Capture: 24 transfers × 8 microframes. Playback: 16 × 8 (16 ms), with a control loop that holds the playback lead constant. An 8 ms playback queue failed with `kIOReturnIsoTooOld`. libusb schedules each submit at least 4 ms ahead, so the playback queue survives event-thread stalls of up to 12 ms.
+- **Lead control.** The lead is sampled once per playback transfer and smoothed over 20 ms. Errors over four packets are fixed in one jump, smaller ones outside a two-packet band by one frame at a time. After a start, and after a callback gap over 10 ms, the smoothed error follows the raw error for 24 transfers, so the jump is exact. The start-up jump corrects any error, so the round-trip latency is the same after every start.
+- **Two realtime threads.** On macOS libusb receives completions on its own CFRunLoop thread (`org.libusb.device-hotplug`) and then wakes the event thread. Both run with a time constraint policy. With the run-loop thread at normal priority, callback gaps of 3 to 20 ms happened about ten times a minute.
+- **Counters.** The daemon logs its stream counters (underruns, USB errors, lead corrections and jumps, fallback packets, stalls, max callback gap since the previous line) to `~/Library/Logs/ftu-daemon.log` at most once a second when they change, and each lead jump with its size.
 - **Process model.** A LaunchDaemon with `UserName` set to the user, so `coreaudiod` can reach its XPC service without root.
 
 ---

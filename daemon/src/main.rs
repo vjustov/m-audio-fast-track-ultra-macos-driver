@@ -9,6 +9,7 @@
 
 mod ctl;
 mod mixer;
+mod pacing;
 mod rt;
 mod shm;
 mod stream;
