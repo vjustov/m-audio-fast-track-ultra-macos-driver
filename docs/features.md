@@ -33,7 +33,7 @@ These likely change the USB interface layout (alt settings or channel count). Th
 | M1 | Bus-powered mode: 4×4 (inputs 1/2, outputs 1/2, S/PDIF I/O) | p.2, p.5 | | ✓ D | ✓ status bit0 = 1 | |
 | M2 | USB 1.1 mode: 2×2, 44.1 and 48 kHz only | p.2, p.3 | | ✓ K (2ch alt 1, 48k) | | |
 | M3 | AC-3/DTS passthrough on S/PDIF out, mutes all analog I/O | p.5 | | ✓ K, D | | |
-| M4 | Device connected but powered off (control panel shows status) | p.15 | | | | |
+| M4 | Device connected but powered off (control panel shows status) | p.15 | | ✓ P ("Hardware Connected" / "Not Connected") | | |
 
 ## Clock
 
@@ -42,7 +42,7 @@ These likely change the USB interface layout (alt settings or channel count). Th
 | C1 | Clock source: internal | p.12 | | ✓ K (iface 2 alt 1) | ✓ status bit13 = 0 | |
 | C2 | Clock source: external (S/PDIF) | p.12 | | ✓ K (iface 2 alt 2) | ✓ status bit13 = 1 | |
 | C3 | External lock: device follows incoming S/PDIF rate | p.8, p.12 | | ✓ K | | |
-| C4 | External, no signal: device falls back to 48 kHz | p.12 | | | | |
+| C4 | External, no signal: device falls back to 48 kHz | p.12 | | ✓ P (message text only) | | |
 | C5 | External signal status readback (locked / no signal, detected rate) | p.12 | | ✓ K, D | ? bit12 stayed 0 | |
 | C6 | S/PDIF input only active when clock is external | p.12 | | ? K | ✓ | |
 
@@ -68,9 +68,10 @@ Rows marked "host?" may be computed in the control panel and sent as raw matrix 
 | X5 | Per source pair: link (host?) | p.10 | | ✓ P (balance law) | | ✓ daemon |
 | X6 | Per source, buses 1/2 and 3/4 only: effect send level | p.10 | ? L3 | ✓ D (one per source) | ✓ u5 ctl9 | ✓ daemon |
 | X7 | Per bus: output fader | p.11 | | | ✓ unit 9 ctl2 = per-output gain, ctl1 = mute (ch 3 tested) | ✓ daemon (unit 9) |
-| X8 | Buses 1/2 and 3/4 only: DSP bypass | p.11 | | | | ? daemon (zeroes the return) |
+| X8 | Buses 1/2 and 3/4 only: DSP bypass | p.11 | | ✓ D (host: unit 7 return off, no device request) | | ✓ daemon (zeroes the return) |
 | X9 | Mixer is independent of the recording path | p.10 | | | | |
 | X10 | Effect return level into outputs 1 to 4 (not in manual) | n/a | ✓ L3 | ✓ D (ctl 2) | ✓ by ear: ctl 2 (or 7) ch 1-4 = out 1-4, ctl 1 = mute. Not in meters | ✓ daemon |
+| X11 | FX sends mode: pre-fader or post-fader (Mix 1/2) (panel 2.3.3, not in manual) | n/a | | ? P (setting), D (`LFXSends8` 9th parameter); scaling not found | | |
 
 ## DSP effects
 
@@ -89,6 +90,7 @@ Only sends from buses 1/2 and 3/4 reach the DSP. The manual gives no parameter r
 | E9 | Parameter: Duration | p.13 | ✓ L5 | ✓ D | ✓ by ear | ✓ |
 | E10 | Parameter: Feedback | p.13 | ✓ L5 | ✓ D | ✓ by ear | ✓ |
 | E11 | Parameter: Volume | p.13 | ✓ L5 | ✓ D | ✓ | ✓ |
+| E12 | Duration, feedback and volume remembered per program, restored on program change (not in manual) | n/a | | ✓ D (`LEffectSettings` per program) | | |
 
 ## Metering
 
