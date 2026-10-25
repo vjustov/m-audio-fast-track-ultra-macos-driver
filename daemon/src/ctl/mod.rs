@@ -14,7 +14,7 @@ pub use store::Store;
 pub use sync::DeviceSync;
 
 use crate::mixer::Mixer;
-use crate::usb::{ClockSource, Device};
+use crate::usb::{ClockSource, Usb};
 use std::ffi::{c_char, c_void, CStr, CString};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Condvar, Mutex};
@@ -103,7 +103,7 @@ impl Control {
         self.meters.lock().unwrap().as_ref().map(|m| m.words[26] as u16)
     }
 
-    pub fn device_opened(&self, dev: &Device) {
+    pub fn device_opened(&self, dev: &impl Usb) {
         let mut st = self.status.lock().unwrap();
         st.connected = true;
         st.firmware = dev.firmware_version();

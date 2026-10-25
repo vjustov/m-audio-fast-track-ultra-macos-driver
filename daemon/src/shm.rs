@@ -4,7 +4,7 @@
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 pub const MAGIC: u32 = 0x3155_5446; // "FTU1"
-pub const VERSION: u32 = 6;
+pub const VERSION: u32 = 7;
 pub const CHANNELS: usize = 8;
 pub const RING_FRAMES: usize = 16384;
 const RING_SAMPLES: usize = RING_FRAMES * CHANNELS;
@@ -41,7 +41,8 @@ pub struct Shm {
 
     /// 0 internal, 1 S/PDIF: the clock the running stream uses.
     pub clock_source: AtomicU32,
-    _pad0: u32,
+    /// 1 while the device is plugged in, 0 while it is not. Unchanged over system sleep.
+    pub device_present: AtomicU32,
 
     pub fallback_packets: AtomicU64,
     pub capture_errors: AtomicU64,

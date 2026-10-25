@@ -24,7 +24,7 @@
 #endif
 
 #define FTU_SHM_MAGIC 0x31555446u  // "FTU1"
-#define FTU_SHM_VERSION 6u
+#define FTU_SHM_VERSION 7u
 #define FTU_CHANNELS 8u
 #define FTU_RING_FRAMES 16384u  // power of two; 341 ms at 48 kHz, 170 ms at 96 kHz
 
@@ -69,7 +69,9 @@ typedef struct {
 
     // Clock the running stream uses: 0 internal, 1 S/PDIF. Written by the daemon at stream start.
     FTU_ATOMIC(uint32_t) clock_source;
-    uint32_t pad0;
+    // 1 while the device is plugged in, 0 while it is not; unchanged over system sleep.
+    // Changes are also pushed to connected plugins over XPC ("presence").
+    FTU_ATOMIC(uint32_t) device_present;
 
     // Stream diagnostics, written by the daemon's USB thread.
     FTU_ATOMIC(uint64_t) fallback_packets;       // playback packets sized without a capture packet

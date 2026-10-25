@@ -197,6 +197,34 @@ impl Device {
     }
 }
 
+/// The device operations the control service and the service loop use, so both can
+/// run against a fake in tests. Streaming itself needs the real `Device`.
+pub trait Usb {
+    fn link_speed(&self) -> &'static str;
+    fn firmware_version(&self) -> Option<String>;
+    fn claim_streaming(&mut self, clock: ClockSource) -> Result<(), UsbError>;
+    fn read_meters_raw(&self) -> Result<[i16; 27], UsbError>;
+    fn set_cur(&self, unit: u8, control: u8, channel: u8, data: &[u8]) -> Result<(), UsbError>;
+}
+
+impl Usb for Device {
+    fn link_speed(&self) -> &'static str {
+        Device::link_speed(self)
+    }
+    fn firmware_version(&self) -> Option<String> {
+        Device::firmware_version(self)
+    }
+    fn claim_streaming(&mut self, clock: ClockSource) -> Result<(), UsbError> {
+        Device::claim_streaming(self, clock)
+    }
+    fn read_meters_raw(&self) -> Result<[i16; 27], UsbError> {
+        Device::read_meters_raw(self)
+    }
+    fn set_cur(&self, unit: u8, control: u8, channel: u8, data: &[u8]) -> Result<(), UsbError> {
+        Device::set_cur(self, unit, control, channel, data)
+    }
+}
+
 impl Drop for Device {
     fn drop(&mut self) {
         self.release_streaming();

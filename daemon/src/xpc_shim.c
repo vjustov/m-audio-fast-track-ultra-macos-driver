@@ -5,6 +5,8 @@
 //   {"op": "set_rate", "rate": Hz} -> {"ok": bool}. The stream restarts at the new rate;
 //                                     the client watches shm sample_rate and generation.
 //   {"op": "ctl", "request": JSON}  -> {"response": JSON}. Mixer control, see ctl/api.rs.
+// Pushed to every client that said hello:
+//   {"op": "presence", "present": bool} when the device appears or goes away.
 // Only coreaudiod's user (_coreaudiod) and the daemon's own user may connect.
 
 #include <dispatch/dispatch.h>
@@ -24,7 +26,54 @@ static xpc_connection_t g_listener;
 // to disk (the service loop does the USB writes), but coreaudiod's hello and set_rate
 // should never queue behind a file write.
 static dispatch_queue_t g_ctl_queue;
-static const void* g_ctl_ctx;  // the daemon's Control, passed back to ftu_ctl_request
+static const void* g_ctl_ctx;
+// Clients that said hello (the plugin in coreaudiod), for presence pushes. Only touched
+// on the listener queue.
+#define MAX_PEERS 8
+static dispatch_queue_t g_queue;
+static xpc_connection_t g_peers[MAX_PEERS];
+
+static void add_peer(xpc_connection_t peer) {
+    for (int i = 0; i < MAX_PEERS; i++) {
+        if (g_peers[i] == peer) {
+            return;
+        }
+    }
+    for (int i = 0; i < MAX_PEERS; i++) {
+        if (!g_peers[i]) {
+            g_peers[i] = peer;
+            xpc_retain(peer);
+            return;
+        }
+    }
+}
+
+static void remove_peer(xpc_connection_t peer) {
+    for (int i = 0; i < MAX_PEERS; i++) {
+        if (g_peers[i] == peer) {
+            g_peers[i] = NULL;
+            xpc_release(peer);
+        }
+    }
+}
+
+// Tells every connected client whether the device is present.
+void ftu_xpc_presence(int present) {
+    if (!g_queue) {
+        return;
+    }
+    dispatch_async(g_queue, ^{
+        for (int i = 0; i < MAX_PEERS; i++) {
+            if (g_peers[i]) {
+                xpc_object_t msg = xpc_dictionary_create(NULL, NULL, 0);
+                xpc_dictionary_set_string(msg, "op", "presence");
+                xpc_dictionary_set_bool(msg, "present", present != 0);
+                xpc_connection_send_message(g_peers[i], msg);
+                xpc_release(msg);
+            }
+        }
+    });
+}  // the daemon's Control, passed back to ftu_ctl_request
 static _Atomic uint32_t g_requested_rate;
 
 // Implemented in Rust (ctl/mod.rs).
@@ -50,6 +99,7 @@ static void handle_message(xpc_connection_t peer, xpc_object_t msg) {
     }
     const char* op = xpc_dictionary_get_string(msg, "op");
     if (op && strcmp(op, "hello") == 0) {
+        add_peer(peer);
         xpc_object_t shm = xpc_shmem_create(g_addr, g_len);
         if (shm) {
             xpc_dictionary_set_value(reply, "shm", shm);
@@ -97,6 +147,7 @@ static void handle_peer(xpc_object_t obj) {
     xpc_connection_set_event_handler(peer, ^(xpc_object_t msg) {
         if (xpc_get_type(msg) == XPC_TYPE_ERROR) {
             if (msg == XPC_ERROR_CONNECTION_INVALID) {
+                remove_peer(peer);
                 xpc_release(peer);
             }
             return;
@@ -113,6 +164,7 @@ int ftu_xpc_listen(const char* name, void* addr, size_t len, const void* ctl) {
     g_len = len;
     g_ctl_ctx = ctl;
     dispatch_queue_t q = dispatch_queue_create("ftu.xpc", DISPATCH_QUEUE_SERIAL);
+    g_queue = q;
     g_ctl_queue = dispatch_queue_create("ftu.xpc.ctl", DISPATCH_QUEUE_SERIAL);
     g_listener = xpc_connection_create_mach_service(name, q, XPC_CONNECTION_MACH_SERVICE_LISTENER);
     if (!g_listener) {

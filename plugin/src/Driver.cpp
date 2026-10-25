@@ -17,6 +17,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstring>
+#include <functional>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -101,6 +102,13 @@ public:
                 RequestRateLocked(rate);
             }
         });
+    }
+
+    // Called with the device's presence when the daemon reports it: on connect and on
+    // each push. Set once, before the first connection.
+    void SetPresenceHandler(std::function<void(bool)> f)
+    {
+        onPresence_ = std::move(f);
     }
 
     // Asks the daemon to stream at `rate` and waits until it does, at most about
@@ -217,6 +225,11 @@ private:
             if (xpc_get_type(event) == XPC_TYPE_ERROR) {
                 // Daemon exited or restarted: its new shared region is a different one.
                 stale_.store(true, std::memory_order_release);
+                return;
+            }
+            const char* op = xpc_dictionary_get_string(event, "op");
+            if (op && std::strcmp(op, "presence") == 0) {
+                Presence(xpc_dictionary_get_bool(event, "present"));
             }
         });
         xpc_connection_resume(conn_);
@@ -252,9 +265,24 @@ private:
         stale_.store(false, std::memory_order_release);
         shm_.store(shm, std::memory_order_release);
         os_log(Log(), "connected to %{public}s", kServiceName);
+        Presence(shm->device_present.load(std::memory_order_acquire) != 0);
+    }
+
+    // Hands presence to the handler off the caller's thread, which may hold mutex_ or
+    // be an XPC handler: the handler notifies the HAL.
+    void Presence(bool present)
+    {
+        if (!onPresence_) {
+            return;
+        }
+        auto f = onPresence_;
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+            f(present);
+        });
     }
 
     std::mutex mutex_;
+    std::function<void(bool)> onPresence_;
     xpc_connection_t conn_ = nullptr;
     std::atomic<const ftu_shm_t*> shm_{nullptr};
     std::atomic<bool> stale_{false};
@@ -625,8 +653,20 @@ std::shared_ptr<aspl::Driver> CreateDriver()
     device->SetControlHandler(handler);
     device->SetIOHandler(handler);
 
+    // Unplugged: the device stays listed but reports not alive, so clients notice. It
+    // is never removed, which would make coreaudiod reconcile its device lists.
+    std::weak_ptr<FtuDevice> weak = device;
+    link->SetPresenceHandler([weak](bool present) {
+        if (auto d = weak.lock()) {
+            os_log(Log(), "device %{public}s", present ? "present" : "unplugged");
+            d->SetIsAlive(present);
+        }
+    });
+
     auto plugin = std::make_shared<aspl::Plugin>(context);
     plugin->AddDevice(device);
+    // Learn the device's presence now rather than at the first StartIO.
+    link->PrepareAsync(0);
 
     return std::make_shared<aspl::Driver>(context, plugin);
 }
