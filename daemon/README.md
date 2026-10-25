@@ -16,7 +16,8 @@ Streaming, the XPC service and mixer control work end to end with the HAL plugin
 | XPC service | `src/xpc_shim.c` | Hands the shared memory to `coreaudiod`'s user and the owner. Rate requests, mixer control |
 | Mixer state | `src/mixer.rs` | Matrix with pan, link, mute and solo; effect; returns; output gain. Vendor pan and balance laws |
 | Control service | `src/ctl.rs` | JSON requests over XPC, persistence, writes changes to the device, meter polling |
-| Test harness | `src/main.rs` (`test`) | Stands in for the plugin: tone into the playback ring, capture ring to WAV |
+| Service loop | `src/supervisor.rs` | Device open and reopen, stream restarts on rate, clock and failure (`Watch`, `after_stop`), counter log |
+| Test harness | `src/harness.rs` (`test`) | Stands in for the plugin: tone into the playback ring, capture ring to WAV |
 
 ## Build and test
 
