@@ -482,13 +482,10 @@ std::shared_ptr<aspl::Driver> CreateDriver()
     link->SetPresenceHandler([weak](bool present) {
         if (auto d = weak.lock()) {
             os_log(Log(), "device %{public}s", present ? "present" : "unplugged");
-            const bool back = present && !d->GetIsAlive();
+            // Not alive detaches playing clients for good: Core Audio moves them to
+            // the default device, as when an Apple-driven device is unplugged
+            // (decided 2026-10-25). They are pointed back by hand after replug.
             d->SetIsAlive(present);
-            // Going not alive stops the clients' IO, and coming back does not restart
-            // it. A configuration change makes clients reconfigure and start again.
-            if (back) {
-                d->RequestConfigurationChange();
-            }
         }
     });
     // The new daemon's shared memory starts a new timeline (the seed changes with it).
