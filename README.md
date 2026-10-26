@@ -6,15 +6,15 @@ An open-source driver for the **M-Audio Fast Track Ultra** USB 2.0 audio interfa
 
 ## Status
 
-Work in progress. Tested on macOS 26 (Tahoe) on an M3 Max with firmware 1.51.
+Version 0.2.0, work in progress. Tested on macOS 26 (Tahoe) on an M3 Max with firmware 1.51.
 
 | Area | State |
 | --- | --- |
 | USB protocol | Mapped and confirmed on hardware: mixer, effects, effect returns, output gain, clock source, sample rates, meters. See [`docs/protocol.md`](docs/protocol.md). |
 | Audio streaming | Works from user space: 8 in, 8 out, 24-bit, 44.1 to 96 kHz, verified bit-level through the device's internal S/PDIF loopback. |
-| Helper daemon (Rust) | Streaming, XPC service and mixer control work. Mixer state is saved and restored after a power cycle. CLI: `ftu-daemon ctl`, see [`daemon/README.md`](daemon/README.md). |
-| HAL plugin (C++) | Works in Core Audio and a DAW (Ableton Live Lite): 8 in, 8 out, all four sample rates, 24 ms output latency. |
-| Control panel (SwiftUI) | Works: monitor mix per output pair, effect, output gain, meters, sample rate, settings files. Build with `panel/build.sh`. See [`panel/README.md`](panel/README.md). |
+| Helper daemon (Rust) | Streaming, XPC service and mixer control work. Mixer state is saved and restored after a power cycle. Releases the device for sleep and reopens it on wake. CLI: `ftu-daemon ctl`, see [`daemon/README.md`](daemon/README.md). |
+| HAL plugin (C++) | Works in Core Audio and a DAW (Ableton Live Lite): 8 in, 8 out, all four sample rates, 24 ms output latency. Survives a daemon restart under a playing client. On unplug the device goes away and clients move to the default device, as with Apple's drivers. |
+| Control panel (SwiftUI) | Works: monitor mix per output pair, effect, output gain, meters, sample rate, clock source (internal or S/PDIF), settings files. Build with `panel/build.sh`. See [`panel/README.md`](panel/README.md). |
 | MIDI | Works through macOS's built-in class driver. Firmware bug: see Known issues. |
 
 Progress against the original control panel's features is tracked in [`docs/features.md`](docs/features.md).
@@ -78,8 +78,9 @@ daemon/target/release/ftu-daemon test --seconds 10 --record /tmp/capture.wav
 
 - **MIDI freezes on transfers over 64 bytes.** Any USB-MIDI transfer to the device larger than 64 bytes (17 or more MIDI events, or a SysEx of about 48 bytes or more) stops all MIDI until the interface is power cycled. The bug is in the device firmware. A workaround, splitting transfers in the daemon, needs the daemon to run as root and is not built yet.
 - **Extra bytes after some SysEx messages.** SysEx messages of certain lengths come back with stray bytes after the end marker. Firmware bug; harmless to most receivers.
-- **High latency.** About 64 ms of output safety offset for now. Tuning is planned.
-- **48 kHz only in the plugin.** The daemon supports all four rates. Rate switching from Core Audio is not wired up yet.
+- **Latency after a rate change.** After switching down from 88.2 or 96 kHz, the round trip is up to 10 frames higher than after a fresh start, and the plugin does not report the difference.
+- **Small glitches.** A 30-minute soak at 48 kHz is clean; 44.1 and 88.2 kHz show a few sub-sample slips per half hour. A stall of the USB thread of 15 ms or more leaves 2 to 3 small phase jumps. Measurements are in [`docs/timeline.md`](docs/timeline.md).
+- **External clock rate.** Core Audio does not follow the rate of an S/PDIF clock source. Lock loss is untested.
 
 ## Repository layout
 
