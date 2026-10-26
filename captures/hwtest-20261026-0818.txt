@@ -1,0 +1,60 @@
+hwtest 20261026-0818, loop output 1 -> input 1
+PASS  daemon: status {
+  "clock": "internal",
+  "clock_locked": null,
+  "connected": true,
+  "driver": "0.1.0",
+  "firmware": "1.51",
+  "port": "USB 2.0",
+  "power": "psu",
+  "sample_rate": 48000,
+  "startup_power": "psu",
+  "streaming": true
+}
+PASS  coreaudiod idle (before): 0.0% CPU
+PASS  loopback: 62.98 frames at 48 kHz
+rate matrix, playback delay 10 ms:
+   48000 ->  44100:   60.94 frames, unreported  -1.06
+   88200 ->  44100:   68.94 frames, unreported   6.94
+   96000 ->  44100:   70.95 frames, unreported   8.95
+   44100 ->  48000:   62.97 frames, unreported  -0.03
+   88200 ->  48000:   67.98 frames, unreported   4.98
+   96000 ->  48000:   69.98 frames, unreported   6.98
+   44100 ->  88200:   84.78 frames, unreported  -1.22
+   48000 ->  88200:   85.78 frames, unreported  -0.22
+   96000 ->  88200:   87.78 frames, unreported   1.78
+   44100 ->  96000:   90.82 frames, unreported  -0.18
+   48000 ->  96000:   90.82 frames, unreported  -0.18
+   88200 ->  96000:   90.82 frames, unreported  -0.18
+FAIL  delay 10: round trip at 44100 Hz repeats: 60.94 to 70.95 frames
+FAIL  delay 10: round trip at 48000 Hz repeats: 62.97 to 69.98 frames
+FAIL  delay 10: round trip at 88200 Hz repeats: 84.78 to 87.78 frames
+PASS  delay 10: round trip at 96000 Hz repeats: 90.82 to 90.82 frames
+FAIL  delay 10: reported latency matches: worst unreported 8.95 frames
+stall recovery (soak 1.5 min, three 20 ms stalls):
+  stall 20 ms injected
+  stall 20 ms injected
+  stall 20 ms injected
+  glitch at 19.887 s (08:21:03.389): phase jump, phase jump +16.0 samples
+  glitch at 19.933 s (08:21:03.434): phase jump, phase jump -3.0 samples
+  glitch at 20.152 s (08:21:03.653): phase jump, phase jump -6.2 samples
+  glitch at 39.901 s (08:21:23.402): phase jump, phase jump +7.8 samples
+  glitch at 39.944 s (08:21:23.446): phase jump, phase jump -1.8 samples
+  glitch at 41.078 s (08:21:24.579): phase jump, phase jump -5.7 samples
+  glitch at 59.948 s (08:21:43.449): phase jump, phase jump +8.2 samples
+  t=    1 min  input  -50.4 dBFS  glitches 7 (total 7)  overloads 0  restarts 1  rate 47999.1 Hz
+  glitch at 60.714 s (08:21:44.215): phase jump, phase jump -5.7 samples
+  glitch at 60.764 s (08:21:44.266): phase jump, phase jump -1.2 samples
+  t=    2 min  input  -50.4 dBFS  glitches 2 (total 9)  overloads 0  restarts 1  rate 47999.0 Hz
+  done: 9 glitches, 0 overloads in 1 min
+FAIL  stalls: one lead jump each: 7 lead jumps
+FAIL  stalls: at most one glitch each: 9 glitches
+soak (1 min):
+  t=    1 min  input  -50.4 dBFS  glitches 0 (total 0)  overloads 0  restarts 1  rate 47996.7 Hz
+  done: 0 glitches, 0 overloads in 1 min
+PASS  soak: no glitches: 0 glitches, 0 overloads
+FAIL  soak: no lead jumps or USB errors: 1 lead jumps, 0 USB error lines
+PASS  coreaudiod idle (after): 0.0% CPU
+
+6 passed, 7 failed: delay 10: round trip at 44100 Hz repeats; delay 10: round trip at 48000 Hz repeats; delay 10: round trip at 88200 Hz repeats; delay 10: reported latency matches; stalls: one lead jump each; stalls: at most one glitch each; soak: no lead jumps or USB errors
+log: /Users/vjustov/code/m-audio-interface-firmware/captures/hwtest-20261026-0818.txt
