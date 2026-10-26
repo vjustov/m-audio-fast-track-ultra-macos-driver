@@ -1,6 +1,6 @@
 [package]
 name = "ftu-daemon"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Helper daemon for the M-Audio Fast Track Ultra: owns the USB device and streams audio through shared memory."
 publish = false
